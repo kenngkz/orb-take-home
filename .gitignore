@@ -16,6 +16,11 @@ dist/
 uploads/*
 !uploads/.gitkeep
 
+# Claude Code
+.claude/settings.local.json
+.claude/*.local.*
+CLAUDE.local.md
+
 # IDE
 .vscode/
 .idea/
