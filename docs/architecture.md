@@ -20,7 +20,7 @@ All services run in Docker Compose: PostgreSQL 16 (pgvector), Python/FastAPI bac
 
 ## Retrieval pipeline
 
-See [docs/04-retrieval.md](04-retrieval.md) for the full deep-dive.
+See [docs/retrieval.md](retrieval.md) for the full deep-dive.
 
 ### Chunking
 
@@ -60,7 +60,7 @@ If hybrid search returns fewer than 3 results (broad queries like "summarise the
 
 ## Citation pipeline
 
-See [docs/05-citations.md](05-citations.md) for the full deep-dive.
+See [docs/citations.md](citations.md) for the full deep-dive.
 
 1. **Prompt engineering** — three reinforcement layers: system prompt (few-shot + negative example), per-turn user-prompt reminder, raw citations preserved in conversation history for model self-demonstration.
 2. **Parser** — regex extracts `[filename.pdf, page N]` from LLM output, validates against retrieved chunks (rejects hallucinated citations), deduplicates.
@@ -79,7 +79,7 @@ All IDs are 16-char hex (truncated UUID4). Foreign keys cascade on delete. Docum
 
 ## Testing
 
-See [docs/06-testing.md](06-testing.md) for the full strategy.
+See [docs/testing.md](testing.md) for the full strategy.
 
 65 tests across 6 files:
 - **Conversation CRUD** (5 tests)
@@ -91,7 +91,7 @@ See [docs/06-testing.md](06-testing.md) for the full strategy.
 
 ## Known limitations
 
-- **Page-level chunking** — cross-page clauses are split. No overlap between chunks.
+- **Page-level chunking** — cross-page clauses are split. Overlap mitigates but doesn't fully solve multi-page clause retrieval.
 - **No reranking** — RRF merge is the only quality gate between retrieval and generation.
 - **Regex citation parsing** — brittle compared to structured LLM output via tool use.
 - **Haiku citation reliability** — still occasionally skips citations despite three reinforcement layers.
