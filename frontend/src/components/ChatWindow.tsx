@@ -13,7 +13,7 @@ interface ChatWindowProps {
 	streamingContent: string;
 	conversationId: string | null;
 	onSend: (content: string) => void;
-	onUpload: (file: File) => void;
+	onUpload: (file: File) => Promise<void> | void;
 }
 
 export function ChatWindow({

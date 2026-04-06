@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 interface ChatInputProps {
 	onSend: (content: string) => void;
-	onUpload: (file: File) => void;
+	onUpload: (file: File) => Promise<void> | void;
 	disabled: boolean;
 }
 

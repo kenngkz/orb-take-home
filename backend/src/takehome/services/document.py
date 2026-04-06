@@ -34,6 +34,10 @@ async def upload_document(
     # Read file content
     content = await file.read()
 
+    # Validate PDF magic bytes
+    if not content[:5] == b"%PDF-":
+        raise ValueError("File does not appear to be a valid PDF.")
+
     # Validate file size
     if len(content) > settings.max_upload_size:
         raise ValueError(
@@ -42,7 +46,7 @@ async def upload_document(
 
     # Generate a unique filename to avoid collisions
     original_filename = file.filename or "document.pdf"
-    unique_name = f"{uuid.uuid4().hex}_{original_filename}"
+    unique_name = f"{uuid.uuid4().hex}.pdf"
     file_path = os.path.join(settings.upload_dir, unique_name)
 
     # Ensure upload directory exists
@@ -72,7 +76,9 @@ async def upload_document(
         doc.close()
     except Exception:
         logger.exception("Failed to extract text from PDF", filename=original_filename)
-        extracted_text = ""
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
 
     logger.info(
         "Extracted text from PDF",
@@ -83,27 +89,32 @@ async def upload_document(
     )
 
     # Create the document record
-    document = Document(
-        conversation_id=conversation_id,
-        filename=original_filename,
-        file_path=file_path,
-        extracted_text=extracted_text if extracted_text else None,
-        page_count=page_count,
-    )
-    session.add(document)
-    await session.flush()  # get document.id before creating chunks
-
-    # Create per-page chunks
-    for page_number, page_content in page_texts:
-        chunk = DocumentChunk(
-            document_id=document.id,
-            page_number=page_number,
-            content=page_content,
+    try:
+        document = Document(
+            conversation_id=conversation_id,
+            filename=original_filename,
+            file_path=file_path,
+            extracted_text=extracted_text if extracted_text else None,
+            page_count=page_count,
         )
-        session.add(chunk)
+        session.add(document)
+        await session.flush()  # get document.id before creating chunks
 
-    await session.commit()
-    await session.refresh(document)
+        # Create per-page chunks
+        for page_number, page_content in page_texts:
+            chunk = DocumentChunk(
+                document_id=document.id,
+                page_number=page_number,
+                content=page_content,
+            )
+            session.add(chunk)
+
+        await session.commit()
+        await session.refresh(document)
+    except Exception:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
     return document
 
 
@@ -127,9 +138,7 @@ async def get_documents_for_conversation(
     return list(result.scalars().all())
 
 
-async def get_chunks_for_document(
-    session: AsyncSession, document_id: str
-) -> list[DocumentChunk]:
+async def get_chunks_for_document(session: AsyncSession, document_id: str) -> list[DocumentChunk]:
     """Get all chunks for a document, ordered by page number."""
     stmt = (
         select(DocumentChunk)

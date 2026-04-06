@@ -2,7 +2,7 @@ import { FileSearch } from "lucide-react";
 import { DocumentUpload } from "./DocumentUpload";
 
 interface EmptyStateProps {
-	onUpload: (file: File) => void;
+	onUpload: (file: File) => Promise<void> | void;
 	uploading?: boolean;
 }
 

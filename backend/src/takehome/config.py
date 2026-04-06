@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 from pydantic_settings import BaseSettings
 
 
@@ -15,8 +13,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-# Ensure the Anthropic API key is available as an environment variable
-# so that pydantic-ai's Anthropic integration can pick it up.
-if settings.anthropic_api_key:
-    os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)

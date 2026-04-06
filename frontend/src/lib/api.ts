@@ -15,6 +15,13 @@ async function handleResponse<T>(response: Response): Promise<T> {
 	return response.json() as Promise<T>;
 }
 
+async function handleVoidResponse(response: Response): Promise<void> {
+	if (!response.ok) {
+		const text = await response.text().catch(() => "Unknown error");
+		throw new Error(`API error ${response.status}: ${text}`);
+	}
+}
+
 export async function fetchConversations(): Promise<Conversation[]> {
 	const res = await fetch(`${BASE}/conversations`);
 	return handleResponse<Conversation[]>(res);
@@ -33,10 +40,7 @@ export async function deleteConversation(id: string): Promise<void> {
 	const res = await fetch(`${BASE}/conversations/${id}`, {
 		method: "DELETE",
 	});
-	if (!res.ok) {
-		const text = await res.text().catch(() => "Unknown error");
-		throw new Error(`API error ${res.status}: ${text}`);
-	}
+	await handleVoidResponse(res);
 }
 
 export async function fetchConversation(
@@ -62,10 +66,7 @@ export async function sendMessage(
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ content }),
 	});
-	if (!res.ok) {
-		const text = await res.text().catch(() => "Unknown error");
-		throw new Error(`API error ${res.status}: ${text}`);
-	}
+	await handleVoidResponse(res);
 	return res;
 }
 
@@ -93,10 +94,7 @@ export async function deleteDocument(documentId: string): Promise<void> {
 	const res = await fetch(`${BASE}/documents/${documentId}`, {
 		method: "DELETE",
 	});
-	if (!res.ok) {
-		const text = await res.text().catch(() => "Unknown error");
-		throw new Error(`API error ${res.status}: ${text}`);
-	}
+	await handleVoidResponse(res);
 }
 
 export function getDocumentUrl(documentId: string): string {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -10,12 +11,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from alembic import command
+from takehome.config import settings
 
 logger = structlog.get_logger()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # Ensure the Anthropic API key is available as an environment variable
+    # so that pydantic-ai's Anthropic integration can pick it up.
+    if settings.anthropic_api_key:
+        os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)
+
     logger.info("Running database migrations...")
     alembic_cfg = Config("alembic.ini")
     # Run in a thread because alembic's env.py uses asyncio.run(),

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -52,12 +54,17 @@ async def update_conversation(
 
 
 async def delete_conversation(session: AsyncSession, conversation_id: str) -> bool:
-    """Delete a conversation. Returns True if it existed and was deleted."""
-    stmt = select(Conversation).where(Conversation.id == conversation_id)
-    result = await session.execute(stmt)
-    conversation = result.scalar_one_or_none()
+    """Delete a conversation and clean up document files from disk.
+
+    Returns True if it existed and was deleted.
+    """
+    conversation = await get_conversation(session, conversation_id)
     if conversation is None:
         return False
+    # Clean up document files from disk
+    for doc in conversation.documents:
+        if os.path.exists(doc.file_path):
+            os.remove(doc.file_path)
     await session.delete(conversation)
     await session.commit()
     return True

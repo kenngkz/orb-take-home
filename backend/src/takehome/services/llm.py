@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import html
 import re
 from collections.abc import AsyncIterator
 
 from pydantic_ai import Agent
-
-from takehome.config import settings  # noqa: F401  # pyright: ignore[reportUnusedImport]
 
 agent = Agent(
     "anthropic:claude-haiku-4-5-20251001",
@@ -53,12 +52,12 @@ async def chat_with_documents(
     if documents:
         doc_sections: list[str] = []
         for filename, text in documents:
-            doc_sections.append(f'<document name="{filename}">\n{text}\n</document>')
+            safe_name = html.escape(filename, quote=True)
+            safe_text = html.escape(text)
+            doc_sections.append(f'<document name="{safe_name}">\n{safe_text}\n</document>')
         prompt_parts.append(
             "The following are the documents being discussed:\n\n"
-            "<documents>\n"
-            + "\n".join(doc_sections)
-            + "\n</documents>\n"
+            "<documents>\n" + "\n".join(doc_sections) + "\n</documents>\n"
         )
     else:
         prompt_parts.append(

@@ -2,7 +2,7 @@ import { Loader2, Upload } from "lucide-react";
 import { type DragEvent, useCallback, useRef, useState } from "react";
 
 interface DocumentUploadProps {
-	onUpload: (file: File) => void;
+	onUpload: (file: File) => Promise<void> | void;
 	uploading?: boolean;
 }
 
@@ -24,13 +24,14 @@ export function DocumentUpload({
 	}, []);
 
 	const handleDrop = useCallback(
-		(e: DragEvent) => {
+		async (e: DragEvent) => {
 			e.preventDefault();
 			setDragOver(false);
-			for (const file of Array.from(e.dataTransfer.files)) {
-				if (file.type === "application/pdf") {
-					onUpload(file);
-				}
+			const pdfFiles = Array.from(e.dataTransfer.files).filter(
+				(f) => f.type === "application/pdf",
+			);
+			for (const file of pdfFiles) {
+				await onUpload(file);
 			}
 		},
 		[onUpload],
@@ -41,11 +42,11 @@ export function DocumentUpload({
 	}, []);
 
 	const handleFileChange = useCallback(
-		(e: React.ChangeEvent<HTMLInputElement>) => {
+		async (e: React.ChangeEvent<HTMLInputElement>) => {
 			const files = e.target.files;
 			if (files) {
 				for (const file of Array.from(files)) {
-					onUpload(file);
+					await onUpload(file);
 				}
 			}
 			if (fileInputRef.current) {

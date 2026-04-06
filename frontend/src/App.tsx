@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { ChatSidebar } from "./components/ChatSidebar";
 import { ChatWindow } from "./components/ChatWindow";
 import { DocumentViewer } from "./components/DocumentViewer";
@@ -29,12 +29,13 @@ export default function App() {
 
 	const {
 		documents,
+		activeDocument,
+		activeDocumentId,
+		selectDocument,
 		upload,
 		remove: removeDocument,
 		refresh: refreshDocuments,
 	} = useDocuments(selectedId);
-
-	const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
 
 	const handleSend = useCallback(
 		async (content: string) => {
@@ -63,10 +64,6 @@ export default function App() {
 		[removeDocument, refreshConversations],
 	);
 
-	const handleCreate = useCallback(async () => {
-		await create();
-	}, [create]);
-
 	return (
 		<TooltipProvider delayDuration={200}>
 			<div className="flex h-screen bg-neutral-50">
@@ -75,7 +72,7 @@ export default function App() {
 					selectedId={selectedId}
 					loading={conversationsLoading}
 					onSelect={select}
-					onCreate={handleCreate}
+					onCreate={create}
 					onDelete={remove}
 				/>
 
@@ -90,12 +87,15 @@ export default function App() {
 					onUpload={handleUpload}
 				/>
 
-				<DocumentViewer
-					documents={documents}
-					onRemove={handleRemoveDocument}
-					activeDocumentId={activeDocumentId}
-					onSelectDocument={setActiveDocumentId}
-				/>
+				{selectedId && (
+					<DocumentViewer
+						documents={documents}
+						activeDocument={activeDocument}
+						onRemove={handleRemoveDocument}
+						activeDocumentId={activeDocumentId}
+						onSelectDocument={selectDocument}
+					/>
+				)}
 			</div>
 		</TooltipProvider>
 	);
