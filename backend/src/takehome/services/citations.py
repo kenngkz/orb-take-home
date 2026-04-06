@@ -54,3 +54,14 @@ def parse_citations(
                     break
 
     return citations
+
+
+# Reuse the same pattern for stripping
+_CITATION_PATTERN = re.compile(r"\s*\[([^,\]]+),\s*(?:page|p\.?)\s*\d+\]", re.IGNORECASE)
+
+
+def strip_citations(text: str) -> str:
+    """Remove [filename, page N] markers from response text."""
+    result = _CITATION_PATTERN.sub("", text)
+    # Clean up any resulting double spaces
+    return re.sub(r"  +", " ", result).strip()

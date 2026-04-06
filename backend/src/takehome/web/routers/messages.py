@@ -13,7 +13,7 @@ from starlette.responses import StreamingResponse
 
 from takehome.db.models import Message
 from takehome.db.session import get_session
-from takehome.services.citations import parse_citations
+from takehome.services.citations import parse_citations, strip_citations
 from takehome.services.conversation import get_conversation, update_conversation
 from takehome.services.llm import chat_with_documents, generate_title
 from takehome.services.retrieval import retrieve_chunks
@@ -156,9 +156,10 @@ async def send_message(
             event_data = json.dumps({"type": "content", "content": error_msg})
             yield f"data: {event_data}\n\n"
 
-        # Parse structured citations from the full response
+        # Parse structured citations and strip raw markers from display text
         citations = parse_citations(full_response, chunks)
         sources = len(citations)
+        clean_content = strip_citations(full_response)
 
         # Save the assistant message to the database.
         # We need a fresh session since the outer one may have been closed.
@@ -168,7 +169,7 @@ async def send_message(
             assistant_message = Message(
                 conversation_id=conversation_id,
                 role="assistant",
-                content=full_response,
+                content=clean_content,
                 sources_cited=sources,
                 citations=citations if citations else None,
             )

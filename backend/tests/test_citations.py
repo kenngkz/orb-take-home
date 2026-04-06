@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from takehome.services.citations import parse_citations
+from takehome.services.citations import parse_citations, strip_citations
 from takehome.services.retrieval import ChunkResult
 
 
@@ -131,3 +131,15 @@ def test_empty_chunks_returns_empty() -> None:
     result = parse_citations(response, [])
 
     assert result == []
+
+
+def test_strip_citations_removes_markers() -> None:
+    """Raw citation markers are removed from display text."""
+    text = "The rent is £50,000 [lease.pdf, page 3]. See also [report.pdf, p. 1]."
+    assert strip_citations(text) == "The rent is £50,000. See also."
+
+
+def test_strip_citations_cleans_whitespace() -> None:
+    """Double spaces left by stripping are collapsed."""
+    text = "According to [lease.pdf, page 3] the rent is due quarterly."
+    assert strip_citations(text) == "According to the rent is due quarterly."
