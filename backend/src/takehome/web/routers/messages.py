@@ -14,8 +14,8 @@ from starlette.responses import StreamingResponse
 from takehome.db.models import Message
 from takehome.db.session import get_session
 from takehome.services.conversation import get_conversation, update_conversation
-from takehome.services.document import get_documents_for_conversation
 from takehome.services.llm import chat_with_documents, count_sources_cited, generate_title
+from takehome.services.retrieval import retrieve_chunks
 
 logger = structlog.get_logger()
 
@@ -106,11 +106,8 @@ async def send_message(
 
     logger.info("User message saved", conversation_id=conversation_id, message_id=user_message.id)
 
-    # Load all documents for the conversation
-    docs = await get_documents_for_conversation(session, conversation_id)
-    documents_list: list[tuple[str, str]] = [
-        (d.filename, d.extracted_text) for d in docs if d.extracted_text
-    ]
+    # Retrieve relevant chunks for the user's query
+    chunks = await retrieve_chunks(session, conversation_id, body.content)
 
     # Load conversation history (exclude the message we just saved, it will be the user_message param)
     stmt = (
@@ -137,7 +134,7 @@ async def send_message(
         try:
             async for chunk in chat_with_documents(
                 user_message=body.content,
-                documents=documents_list,
+                chunks=chunks,
                 conversation_history=conversation_history,
             ):
                 full_response += chunk

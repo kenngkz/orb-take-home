@@ -6,18 +6,21 @@ from collections.abc import AsyncIterator
 
 from pydantic_ai import Agent
 
+from takehome.services.retrieval import ChunkResult
+
 agent = Agent(
     "anthropic:claude-haiku-4-5-20251001",
     system_prompt=(
         "You are a helpful legal document assistant for commercial real estate lawyers. "
         "You help lawyers review and understand documents during due diligence.\n\n"
         "IMPORTANT INSTRUCTIONS:\n"
-        "- Answer questions based on the document content provided.\n"
-        "- The user may have uploaded multiple documents. When referencing specific parts, "
-        "cite the document name along with the relevant section, clause, or page.\n"
-        "- If the answer is not in the documents, say so clearly. Do not fabricate information.\n"
-        "- Be concise and precise. Lawyers value accuracy over verbosity.\n"
-        "- When you reference specific content, mention the document name, section, clause, or page."
+        "- Answer questions based on the document excerpts provided.\n"
+        "- Excerpts are tagged with their source document name and page number.\n"
+        "- When referencing specific content, ALWAYS cite the document name and page number "
+        "(e.g., 'According to lease-agreement.pdf, page 3, ...').\n"
+        "- The user may have uploaded multiple documents. Compare and cross-reference across them.\n"
+        "- If the answer is not in the provided excerpts, say so clearly. Do not fabricate information.\n"
+        "- Be concise and precise. Lawyers value accuracy over verbosity."
     ),
 )
 
@@ -37,27 +40,28 @@ async def generate_title(user_message: str) -> str:
 
 async def chat_with_documents(
     user_message: str,
-    documents: list[tuple[str, str]],
+    chunks: list[ChunkResult],
     conversation_history: list[dict[str, str]],
 ) -> AsyncIterator[str]:
     """Stream a response to the user's message, yielding text chunks.
 
-    Builds a prompt that includes document context and conversation history,
-    then streams the response from the LLM.
-
-    Each entry in `documents` is a (filename, extracted_text) tuple.
+    Builds a prompt that includes retrieved document chunks and conversation
+    history, then streams the response from the LLM.
     """
     prompt_parts: list[str] = []
 
-    if documents:
-        doc_sections: list[str] = []
-        for filename, text in documents:
-            safe_name = html.escape(filename, quote=True)
-            safe_text = html.escape(text)
-            doc_sections.append(f'<document name="{safe_name}">\n{safe_text}\n</document>')
+    if chunks:
+        chunk_sections: list[str] = []
+        for chunk in chunks:
+            safe_name = html.escape(chunk.document_filename, quote=True)
+            safe_content = html.escape(chunk.content)
+            chunk_sections.append(
+                f'<chunk document="{safe_name}" page="{chunk.page_number}">\n'
+                f"{safe_content}\n</chunk>"
+            )
         prompt_parts.append(
-            "The following are the documents being discussed:\n\n"
-            "<documents>\n" + "\n".join(doc_sections) + "\n</documents>\n"
+            "The following are excerpts from the documents being discussed:\n\n"
+            "<documents>\n" + "\n".join(chunk_sections) + "\n</documents>\n"
         )
     else:
         prompt_parts.append(
