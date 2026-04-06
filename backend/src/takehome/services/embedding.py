@@ -12,6 +12,11 @@ EMBEDDING_DIM = 384
 _model_cache: dict[str, Any] = {}
 
 
+def warm_up() -> None:
+    """Pre-load the embedding model (called at startup)."""
+    _get_model()
+
+
 def _get_model() -> Any:
     """Get or lazily initialize the embedding model."""
     if "model" not in _model_cache:

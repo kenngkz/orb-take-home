@@ -171,22 +171,6 @@ async def send_message(
             await save_session.commit()
             await save_session.refresh(assistant_message)
 
-            # Auto-generate title from first user message
-            if is_first_message:
-                try:
-                    title = await generate_title(body.content)
-                    await update_conversation(save_session, conversation_id, title)
-                    logger.info(
-                        "Auto-generated conversation title",
-                        conversation_id=conversation_id,
-                        title=title,
-                    )
-                except Exception:
-                    logger.exception(
-                        "Failed to generate title",
-                        conversation_id=conversation_id,
-                    )
-
             # Send the final message event with the complete assistant message
             message_data = json.dumps(
                 {
@@ -212,6 +196,23 @@ async def send_message(
                 }
             )
             yield f"data: {done_data}\n\n"
+
+            # Auto-generate title from first user message (after done event
+            # so the client isn't blocked waiting for the LLM title call)
+            if is_first_message:
+                try:
+                    title = await generate_title(body.content)
+                    await update_conversation(save_session, conversation_id, title)
+                    logger.info(
+                        "Auto-generated conversation title",
+                        conversation_id=conversation_id,
+                        title=title,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to generate title",
+                        conversation_id=conversation_id,
+                    )
 
     return StreamingResponse(
         event_stream(),

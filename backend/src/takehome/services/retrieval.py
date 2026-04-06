@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 import structlog
@@ -7,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from takehome.db.models import Document, DocumentChunk
+from takehome.services.embedding import embed_query
 
 logger = structlog.get_logger()
 
@@ -34,7 +36,7 @@ async def _fts_search(
     top_k: int,
 ) -> list[ChunkResult]:
     """Full-text search using PostgreSQL tsvector/tsquery."""
-    ts_query = func.plainto_tsquery("english", query)
+    ts_query = func.websearch_to_tsquery("english", query)
     ts_vector = func.to_tsvector("english", DocumentChunk.content)
 
     stmt = (
@@ -212,15 +214,17 @@ async def retrieve_chunks(
     4. If combined results < min_results, fall back to all chunks.
     5. Apply token budget.
     """
-    # --- FTS search ---
-    fts_results = await _fts_search(session, conversation_id, query, top_k)
+    # --- FTS search (best-effort) ---
+    fts_results: list[ChunkResult] = []
+    try:
+        fts_results = await _fts_search(session, conversation_id, query, top_k)
+    except Exception:
+        logger.debug("FTS search failed, continuing without keyword results")
 
     # --- Vector search (best-effort) ---
     vector_results: list[ChunkResult] = []
     try:
-        from takehome.services.embedding import embed_query
-
-        query_embedding = embed_query(query)
+        query_embedding = await asyncio.to_thread(embed_query, query)
         vector_results = await _vector_search(
             session, conversation_id, query_embedding, top_k
         )

@@ -5,8 +5,11 @@ import re
 from collections.abc import AsyncIterator
 
 from pydantic_ai import Agent
+from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
 
 from takehome.services.retrieval import ChunkResult
+
+MAX_HISTORY_TURNS = 20
 
 agent = Agent(
     "anthropic:claude-haiku-4-5-20251001",
@@ -15,6 +18,8 @@ agent = Agent(
         "You help lawyers review and understand documents during due diligence.\n\n"
         "IMPORTANT INSTRUCTIONS:\n"
         "- Answer questions based on the document excerpts provided.\n"
+        "- Document excerpts are provided in <chunk> tags with 'document' and 'page' attributes. "
+        "Use these to cite your sources precisely.\n"
         "- Excerpts are tagged with their source document name and page number.\n"
         "- When referencing specific content, ALWAYS cite the document name and page number "
         "(e.g., 'According to lease-agreement.pdf, page 3, ...').\n"
@@ -38,6 +43,47 @@ async def generate_title(user_message: str) -> str:
     return title
 
 
+def _build_context_prompt(chunks: list[ChunkResult]) -> str:
+    """Build the document context portion of the prompt."""
+    if not chunks:
+        return (
+            "No documents have been uploaded yet. If the user asks about a document, "
+            "let them know they need to upload one first."
+        )
+
+    chunk_sections: list[str] = []
+    for chunk in chunks:
+        safe_name = html.escape(chunk.document_filename, quote=True)
+        safe_content = html.escape(chunk.content)
+        chunk_sections.append(
+            f'<chunk document="{safe_name}" page="{chunk.page_number}">\n'
+            f"{safe_content}\n</chunk>"
+        )
+    return (
+        "The following are excerpts from the documents being discussed:\n\n"
+        "<documents>\n" + "\n".join(chunk_sections) + "\n</documents>"
+    )
+
+
+def _build_message_history(
+    conversation_history: list[dict[str, str]],
+) -> list[ModelMessage]:
+    """Convert conversation history to Pydantic-AI message objects.
+
+    Applies a sliding window to keep only the last MAX_HISTORY_TURNS messages.
+    """
+    # Apply sliding window
+    recent = conversation_history[-MAX_HISTORY_TURNS:]
+
+    messages: list[ModelMessage] = []
+    for msg in recent:
+        if msg["role"] == "user":
+            messages.append(ModelRequest(parts=[UserPromptPart(content=msg["content"])]))
+        elif msg["role"] == "assistant":
+            messages.append(ModelResponse(parts=[TextPart(content=msg["content"])]))
+    return messages
+
+
 async def chat_with_documents(
     user_message: str,
     chunks: list[ChunkResult],
@@ -45,48 +91,17 @@ async def chat_with_documents(
 ) -> AsyncIterator[str]:
     """Stream a response to the user's message, yielding text chunks.
 
-    Builds a prompt that includes retrieved document chunks and conversation
-    history, then streams the response from the LLM.
+    Builds a prompt with document context, converts conversation history to
+    proper role-tagged messages via Pydantic-AI's message_history, and streams
+    the response.
     """
-    prompt_parts: list[str] = []
+    context = _build_context_prompt(chunks)
+    history = _build_message_history(conversation_history)
 
-    if chunks:
-        chunk_sections: list[str] = []
-        for chunk in chunks:
-            safe_name = html.escape(chunk.document_filename, quote=True)
-            safe_content = html.escape(chunk.content)
-            chunk_sections.append(
-                f'<chunk document="{safe_name}" page="{chunk.page_number}">\n'
-                f"{safe_content}\n</chunk>"
-            )
-        prompt_parts.append(
-            "The following are excerpts from the documents being discussed:\n\n"
-            "<documents>\n" + "\n".join(chunk_sections) + "\n</documents>\n"
-        )
-    else:
-        prompt_parts.append(
-            "No documents have been uploaded yet. If the user asks about a document, "
-            "let them know they need to upload one first.\n"
-        )
+    # Prepend document context to the user message
+    user_prompt = f"{context}\n\n{user_message}"
 
-    # Add conversation history
-    if conversation_history:
-        prompt_parts.append("Previous conversation:\n")
-        for msg in conversation_history:
-            role = msg["role"]
-            content = msg["content"]
-            if role == "user":
-                prompt_parts.append(f"User: {content}\n")
-            elif role == "assistant":
-                prompt_parts.append(f"Assistant: {content}\n")
-        prompt_parts.append("\n")
-
-    # Add the current user message
-    prompt_parts.append(f"User: {user_message}")
-
-    full_prompt = "\n".join(prompt_parts)
-
-    async with agent.run_stream(full_prompt) as result:
+    async with agent.run_stream(user_prompt, message_history=history) as result:
         async for text in result.stream_text(delta=True):
             yield text
 

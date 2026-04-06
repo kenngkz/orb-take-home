@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import uuid
 
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from takehome.config import settings
 from takehome.db.models import Document, DocumentChunk
+from takehome.services.embedding import embed_texts
 
 logger = structlog.get_logger()
 
@@ -59,20 +61,16 @@ async def upload_document(
     logger.info("Saved uploaded PDF", filename=original_filename, path=file_path, size=len(content))
 
     # Extract text using PyMuPDF
-    extracted_text = ""
     page_count = 0
     page_texts: list[tuple[int, str]] = []  # (page_number, text)
     try:
         doc = fitz.open(file_path)
         page_count = len(doc)
-        pages: list[str] = []
         for page_num in range(page_count):
             page = doc[page_num]
             text: str = page.get_text()  # type: ignore[union-attr]
             if text.strip():
-                pages.append(f"--- Page {page_num + 1} ---\n{text}")
                 page_texts.append((page_num + 1, text.strip()))
-        extracted_text = "\n\n".join(pages)
         doc.close()
     except Exception:
         logger.exception("Failed to extract text from PDF", filename=original_filename)
@@ -84,7 +82,6 @@ async def upload_document(
         "Extracted text from PDF",
         filename=original_filename,
         page_count=page_count,
-        text_length=len(extracted_text),
         chunk_count=len(page_texts),
     )
 
@@ -94,7 +91,7 @@ async def upload_document(
             conversation_id=conversation_id,
             filename=original_filename,
             file_path=file_path,
-            extracted_text=extracted_text if extracted_text else None,
+            extracted_text=None,
             page_count=page_count,
         )
         session.add(document)
@@ -103,9 +100,9 @@ async def upload_document(
         # Embed and create per-page chunks
         embeddings: list[list[float]] | None = None
         try:
-            from takehome.services.embedding import embed_texts
-
-            embeddings = embed_texts([text for _, text in page_texts])
+            embeddings = await asyncio.to_thread(
+                embed_texts, [text for _, text in page_texts]
+            )
         except Exception:
             logger.warning("Embedding failed, storing chunks without vectors")
 

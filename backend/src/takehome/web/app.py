@@ -29,6 +29,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # which cannot nest inside the already-running event loop.
     await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
     logger.info("Migrations complete")
+
+    # Pre-warm the embedding model so the first request isn't blocked
+    # by the ~80MB model download.
+    try:
+        from takehome.services.embedding import warm_up
+
+        await asyncio.to_thread(warm_up)
+        logger.info("Embedding model pre-warmed")
+    except Exception:
+        logger.warning("Failed to pre-warm embedding model, will retry on first use")
+
     yield
 
 
