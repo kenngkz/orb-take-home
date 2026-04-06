@@ -68,6 +68,18 @@ db-shell:
     docker compose exec db psql -U orbital orbital_takehome
 
 # =============================================================================
+# Testing
+# =============================================================================
+
+# Run backend tests
+test *args:
+    docker compose exec backend uv run pytest {{args}}
+
+# Run backend tests with verbose output
+test-v *args:
+    docker compose exec backend uv run pytest -v {{args}}
+
+# =============================================================================
 # Code Quality
 # =============================================================================
 

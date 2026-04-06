@@ -21,6 +21,9 @@ uploads/*
 .claude/*.local.*
 CLAUDE.local.md
 
+# pyenv
+.python-version
+
 # IDE
 .vscode/
 .idea/
