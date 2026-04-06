@@ -85,7 +85,6 @@ export default function App() {
 					error={messagesError}
 					streaming={streaming}
 					streamingContent={streamingContent}
-					hasDocument={documents.length > 0}
 					conversationId={selectedId}
 					onSend={handleSend}
 					onUpload={handleUpload}

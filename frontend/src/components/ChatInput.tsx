@@ -7,15 +7,9 @@ interface ChatInputProps {
 	onSend: (content: string) => void;
 	onUpload: (file: File) => void;
 	disabled: boolean;
-	hasDocument: boolean;
 }
 
-export function ChatInput({
-	onSend,
-	onUpload,
-	disabled,
-	hasDocument,
-}: ChatInputProps) {
+export function ChatInput({ onSend, onUpload, disabled }: ChatInputProps) {
 	const [value, setValue] = useState("");
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -71,16 +65,13 @@ export function ChatInput({
 								variant="ghost"
 								size="icon"
 								className="h-8 w-8 flex-shrink-0"
-								disabled={hasDocument}
 								onClick={() => fileInputRef.current?.click()}
 							>
 								<Paperclip className="h-4 w-4 text-neutral-500" />
 							</Button>
 						</div>
 					</TooltipTrigger>
-					{hasDocument && (
-						<TooltipContent>Document already uploaded</TooltipContent>
-					)}
+					<TooltipContent>Attach document</TooltipContent>
 				</Tooltip>
 
 				<input

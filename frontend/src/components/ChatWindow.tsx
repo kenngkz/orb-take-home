@@ -11,7 +11,6 @@ interface ChatWindowProps {
 	error: string | null;
 	streaming: boolean;
 	streamingContent: string;
-	hasDocument: boolean;
 	conversationId: string | null;
 	onSend: (content: string) => void;
 	onUpload: (file: File) => void;
@@ -23,7 +22,6 @@ export function ChatWindow({
 	error,
 	streaming,
 	streamingContent,
-	hasDocument,
 	conversationId,
 	onSend,
 	onUpload,
@@ -66,22 +64,9 @@ export function ChatWindow({
 		return (
 			<div className="flex flex-1 flex-col bg-white">
 				<div className="flex flex-1 items-center justify-center">
-					{hasDocument ? (
-						<div className="text-center">
-							<p className="text-sm text-neutral-500">
-								Document uploaded. Ask a question to get started.
-							</p>
-						</div>
-					) : (
-						<EmptyState onUpload={onUpload} />
-					)}
+					<EmptyState onUpload={onUpload} />
 				</div>
-				<ChatInput
-					onSend={onSend}
-					onUpload={onUpload}
-					disabled={streaming}
-					hasDocument={hasDocument}
-				/>
+				<ChatInput onSend={onSend} onUpload={onUpload} disabled={streaming} />
 			</div>
 		);
 	}
@@ -103,12 +88,7 @@ export function ChatWindow({
 				</div>
 			</div>
 
-			<ChatInput
-				onSend={onSend}
-				onUpload={onUpload}
-				disabled={streaming}
-				hasDocument={hasDocument}
-			/>
+			<ChatInput onSend={onSend} onUpload={onUpload} disabled={streaming} />
 		</div>
 	);
 }
