@@ -1,10 +1,10 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { ChatSidebar } from "./components/ChatSidebar";
 import { ChatWindow } from "./components/ChatWindow";
 import { DocumentViewer } from "./components/DocumentViewer";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { useConversations } from "./hooks/use-conversations";
-import { useDocument } from "./hooks/use-document";
+import { useDocuments } from "./hooks/use-documents";
 import { useMessages } from "./hooks/use-messages";
 
 export default function App() {
@@ -28,10 +28,13 @@ export default function App() {
 	} = useMessages(selectedId);
 
 	const {
-		document,
+		documents,
 		upload,
-		refresh: refreshDocument,
-	} = useDocument(selectedId);
+		remove: removeDocument,
+		refresh: refreshDocuments,
+	} = useDocuments(selectedId);
+
+	const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
 
 	const handleSend = useCallback(
 		async (content: string) => {
@@ -45,11 +48,19 @@ export default function App() {
 		async (file: File) => {
 			const doc = await upload(file);
 			if (doc) {
-				refreshDocument();
+				refreshDocuments();
 				refreshConversations();
 			}
 		},
-		[upload, refreshDocument, refreshConversations],
+		[upload, refreshDocuments, refreshConversations],
+	);
+
+	const handleRemoveDocument = useCallback(
+		async (documentId: string) => {
+			await removeDocument(documentId);
+			refreshConversations();
+		},
+		[removeDocument, refreshConversations],
 	);
 
 	const handleCreate = useCallback(async () => {
@@ -74,13 +85,18 @@ export default function App() {
 					error={messagesError}
 					streaming={streaming}
 					streamingContent={streamingContent}
-					hasDocument={!!document}
+					hasDocument={documents.length > 0}
 					conversationId={selectedId}
 					onSend={handleSend}
 					onUpload={handleUpload}
 				/>
 
-				<DocumentViewer document={document} />
+				<DocumentViewer
+					documents={documents}
+					onRemove={handleRemoveDocument}
+					activeDocumentId={activeDocumentId}
+					onSelectDocument={setActiveDocumentId}
+				/>
 			</div>
 		</TooltipProvider>
 	);

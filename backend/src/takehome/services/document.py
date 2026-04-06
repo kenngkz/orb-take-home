@@ -23,13 +23,8 @@ async def upload_document(
     Validates the file is a PDF, saves it to disk, extracts text using PyMuPDF,
     and stores metadata in the database.
 
-    Raises ValueError if the conversation already has a document or the file is not a PDF.
+    Raises ValueError if the file is not a PDF.
     """
-    # Check if conversation already has a document
-    existing = await get_document_for_conversation(session, conversation_id)
-    if existing is not None:
-        raise ValueError("Conversation already has a document. Only one document per conversation is allowed.")
-
     # Validate file type
     if file.content_type not in ("application/pdf", "application/x-pdf"):
         filename = file.filename or ""
@@ -68,7 +63,7 @@ async def upload_document(
         pages: list[str] = []
         for page_num in range(page_count):
             page = doc[page_num]
-            text = page.get_text()  # type: ignore[union-attr]
+            text: str = page.get_text()  # type: ignore[union-attr]
             if text.strip():
                 pages.append(f"--- Page {page_num + 1} ---\n{text}")
         extracted_text = "\n\n".join(pages)
@@ -105,10 +100,32 @@ async def get_document(session: AsyncSession, document_id: str) -> Document | No
     return result.scalar_one_or_none()
 
 
-async def get_document_for_conversation(
+async def get_documents_for_conversation(
     session: AsyncSession, conversation_id: str
-) -> Document | None:
-    """Get the document for a conversation, if one exists."""
-    stmt = select(Document).where(Document.conversation_id == conversation_id)
+) -> list[Document]:
+    """Get all documents for a conversation, ordered by upload time."""
+    stmt = (
+        select(Document)
+        .where(Document.conversation_id == conversation_id)
+        .order_by(Document.uploaded_at.asc())
+    )
     result = await session.execute(stmt)
-    return result.scalar_one_or_none()
+    return list(result.scalars().all())
+
+
+async def delete_document(session: AsyncSession, document_id: str) -> bool:
+    """Delete a document by ID and remove the file from disk.
+
+    Returns True if the document was found and deleted, False otherwise.
+    """
+    document = await get_document(session, document_id)
+    if document is None:
+        return False
+
+    if os.path.exists(document.file_path):
+        os.remove(document.file_path)
+        logger.info("Removed document file from disk", path=document.file_path)
+
+    await session.delete(document)
+    await session.commit()
+    return True

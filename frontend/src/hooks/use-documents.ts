@@ -2,22 +2,22 @@ import { useCallback, useEffect, useState } from "react";
 import * as api from "../lib/api";
 import type { Document } from "../types";
 
-export function useDocument(conversationId: string | null) {
-	const [document, setDocument] = useState<Document | null>(null);
+export function useDocuments(conversationId: string | null) {
+	const [documents, setDocuments] = useState<Document[]>([]);
 	const [uploading, setUploading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
 	const refresh = useCallback(async () => {
 		if (!conversationId) {
-			setDocument(null);
+			setDocuments([]);
 			return;
 		}
 		try {
 			setError(null);
-			const detail = await api.fetchConversation(conversationId);
-			setDocument(detail.document ?? null);
+			const docs = await api.fetchDocuments(conversationId);
+			setDocuments(docs);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to load document");
+			setError(err instanceof Error ? err.message : "Failed to load documents");
 		}
 	}, [conversationId]);
 
@@ -32,7 +32,7 @@ export function useDocument(conversationId: string | null) {
 				setUploading(true);
 				setError(null);
 				const doc = await api.uploadDocument(conversationId, file);
-				setDocument(doc);
+				setDocuments((prev) => [...prev, doc]);
 				return doc;
 			} catch (err) {
 				setError(
@@ -46,11 +46,24 @@ export function useDocument(conversationId: string | null) {
 		[conversationId],
 	);
 
+	const remove = useCallback(async (documentId: string) => {
+		try {
+			setError(null);
+			await api.deleteDocument(documentId);
+			setDocuments((prev) => prev.filter((d) => d.id !== documentId));
+		} catch (err) {
+			setError(
+				err instanceof Error ? err.message : "Failed to delete document",
+			);
+		}
+	}, []);
+
 	return {
-		document,
+		documents,
 		uploading,
 		error,
 		upload,
+		remove,
 		refresh,
 	};
 }

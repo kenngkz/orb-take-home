@@ -27,9 +27,10 @@ export function DocumentUpload({
 		(e: DragEvent) => {
 			e.preventDefault();
 			setDragOver(false);
-			const file = e.dataTransfer.files[0];
-			if (file && file.type === "application/pdf") {
-				onUpload(file);
+			for (const file of Array.from(e.dataTransfer.files)) {
+				if (file.type === "application/pdf") {
+					onUpload(file);
+				}
 			}
 		},
 		[onUpload],
@@ -41,9 +42,11 @@ export function DocumentUpload({
 
 	const handleFileChange = useCallback(
 		(e: React.ChangeEvent<HTMLInputElement>) => {
-			const file = e.target.files?.[0];
-			if (file) {
-				onUpload(file);
+			const files = e.target.files;
+			if (files) {
+				for (const file of Array.from(files)) {
+					onUpload(file);
+				}
 			}
 			if (fileInputRef.current) {
 				fileInputRef.current.value = "";
@@ -69,6 +72,7 @@ export function DocumentUpload({
 				ref={fileInputRef}
 				type="file"
 				accept=".pdf"
+				multiple
 				className="hidden"
 				onChange={handleFileChange}
 			/>
@@ -84,7 +88,7 @@ export function DocumentUpload({
 				<div className="flex flex-col items-center">
 					<Upload className="mb-3 h-10 w-10 text-neutral-400" />
 					<p className="text-sm font-medium text-neutral-600">
-						Upload a PDF document
+						Upload PDF documents
 					</p>
 					<p className="mt-1 text-xs text-neutral-400">
 						Click or drag and drop

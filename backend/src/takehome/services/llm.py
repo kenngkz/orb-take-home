@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 
 from pydantic_ai import Agent
 
-from takehome.config import settings  # noqa: F401 — triggers ANTHROPIC_API_KEY export
+from takehome.config import settings  # noqa: F401  # pyright: ignore[reportUnusedImport]
 
 agent = Agent(
     "anthropic:claude-haiku-4-5-20251001",
@@ -14,10 +14,11 @@ agent = Agent(
         "You help lawyers review and understand documents during due diligence.\n\n"
         "IMPORTANT INSTRUCTIONS:\n"
         "- Answer questions based on the document content provided.\n"
-        "- When referencing specific parts of the document, cite the relevant section or clause.\n"
-        "- If the answer is not in the document, say so clearly. Do not fabricate information.\n"
+        "- The user may have uploaded multiple documents. When referencing specific parts, "
+        "cite the document name along with the relevant section, clause, or page.\n"
+        "- If the answer is not in the documents, say so clearly. Do not fabricate information.\n"
         "- Be concise and precise. Lawyers value accuracy over verbosity.\n"
-        "- When you reference specific content, mention the section, clause, or page."
+        "- When you reference specific content, mention the document name, section, clause, or page."
     ),
 )
 
@@ -35,30 +36,33 @@ async def generate_title(user_message: str) -> str:
     return title
 
 
-async def chat_with_document(
+async def chat_with_documents(
     user_message: str,
-    document_text: str | None,
+    documents: list[tuple[str, str]],
     conversation_history: list[dict[str, str]],
 ) -> AsyncIterator[str]:
     """Stream a response to the user's message, yielding text chunks.
 
     Builds a prompt that includes document context and conversation history,
     then streams the response from the LLM.
+
+    Each entry in `documents` is a (filename, extracted_text) tuple.
     """
-    # Build the full prompt with context
     prompt_parts: list[str] = []
 
-    # Add document context if available
-    if document_text:
+    if documents:
+        doc_sections: list[str] = []
+        for filename, text in documents:
+            doc_sections.append(f'<document name="{filename}">\n{text}\n</document>')
         prompt_parts.append(
-            "The following is the content of the document being discussed:\n\n"
-            "<document>\n"
-            f"{document_text}\n"
-            "</document>\n"
+            "The following are the documents being discussed:\n\n"
+            "<documents>\n"
+            + "\n".join(doc_sections)
+            + "\n</documents>\n"
         )
     else:
         prompt_parts.append(
-            "No document has been uploaded yet. If the user asks about a document, "
+            "No documents have been uploaded yet. If the user asks about a document, "
             "let them know they need to upload one first.\n"
         )
 
