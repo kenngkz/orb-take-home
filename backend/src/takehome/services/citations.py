@@ -56,12 +56,35 @@ def parse_citations(
     return citations
 
 
-# Reuse the same pattern for stripping
-_CITATION_PATTERN = re.compile(r"\s*\[([^,\]]+),\s*(?:page|p\.?)\s*\d+\]", re.IGNORECASE)
+_RAW_CITATION_RE = re.compile(r"\[([^,\]]+),\s*(?:page|p\.?)\s*(\d+)\]", re.IGNORECASE)
 
 
-def strip_citations(text: str) -> str:
-    """Remove [filename, page N] markers from response text."""
-    result = _CITATION_PATTERN.sub("", text)
-    # Clean up any resulting double spaces
-    return re.sub(r"  +", " ", result).strip()
+def replace_citations_with_markers(
+    text: str,
+    citations: list[dict[str, str | int]],
+) -> str:
+    """Replace [filename, page N] with numbered markers [1], [2], etc.
+
+    Numbers correspond to 1-based position in the citations list.
+    Invalid citations (not in the list) are stripped.
+    """
+    # Build (filename_lower, page) -> 1-based index
+    citation_index: dict[tuple[str, int], int] = {}
+    for i, c in enumerate(citations):
+        key = (str(c["filename"]).lower(), int(c["page_number"]))
+        if key not in citation_index:
+            citation_index[key] = i + 1
+
+    def _replacer(match: re.Match[str]) -> str:
+        filename = match.group(1).strip().lower()
+        page = int(match.group(2))
+        idx = citation_index.get((filename, page))
+        if idx is not None:
+            return f"[{idx}]"
+        return ""
+
+    result = _RAW_CITATION_RE.sub(_replacer, text)
+    # Clean up: collapse double spaces, remove space before punctuation
+    result = re.sub(r"  +", " ", result)
+    result = re.sub(r" ([.,;:!?])", r"\1", result)
+    return result.strip()

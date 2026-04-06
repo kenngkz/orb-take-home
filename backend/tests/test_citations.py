@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from takehome.services.citations import parse_citations, strip_citations
+from takehome.services.citations import parse_citations, replace_citations_with_markers
 from takehome.services.retrieval import ChunkResult
 
 
@@ -133,13 +133,35 @@ def test_empty_chunks_returns_empty() -> None:
     assert result == []
 
 
-def test_strip_citations_removes_markers() -> None:
-    """Raw citation markers are removed from display text."""
+def test_replace_citations_with_numbered_markers() -> None:
+    """Raw citation markers are replaced with [1], [2], etc."""
+    citations: list[dict[str, str | int]] = [
+        {"document_id": "d1", "filename": "lease.pdf", "page_number": 3},
+        {"document_id": "d2", "filename": "report.pdf", "page_number": 1},
+    ]
     text = "The rent is £50,000 [lease.pdf, page 3]. See also [report.pdf, p. 1]."
-    assert strip_citations(text) == "The rent is £50,000. See also."
+    assert replace_citations_with_markers(text, citations) == (
+        "The rent is £50,000 [1]. See also [2]."
+    )
 
 
-def test_strip_citations_cleans_whitespace() -> None:
-    """Double spaces left by stripping are collapsed."""
-    text = "According to [lease.pdf, page 3] the rent is due quarterly."
-    assert strip_citations(text) == "According to the rent is due quarterly."
+def test_replace_duplicate_citations_same_number() -> None:
+    """Same citation appearing twice gets the same number."""
+    citations: list[dict[str, str | int]] = [
+        {"document_id": "d1", "filename": "lease.pdf", "page_number": 3},
+    ]
+    text = "See [lease.pdf, page 3] for details. Again [lease.pdf, page 3]."
+    assert replace_citations_with_markers(text, citations) == (
+        "See [1] for details. Again [1]."
+    )
+
+
+def test_replace_invalid_citations_stripped() -> None:
+    """Citations not in the list are stripped."""
+    citations: list[dict[str, str | int]] = [
+        {"document_id": "d1", "filename": "lease.pdf", "page_number": 3},
+    ]
+    text = "Valid [lease.pdf, page 3] and invalid [unknown.pdf, page 1]."
+    assert replace_citations_with_markers(text, citations) == (
+        "Valid [1] and invalid."
+    )
