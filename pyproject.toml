@@ -57,6 +57,7 @@ known-first-party = ["takehome"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 extraPaths = ["backend/src"]
+reportMissingTypeStubs = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

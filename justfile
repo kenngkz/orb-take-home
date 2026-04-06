@@ -80,32 +80,35 @@ test-v *args:
     docker compose exec backend uv run pytest -v {{args}}
 
 # =============================================================================
-# Code Quality
+# Code Quality (runs locally, not in Docker)
 # =============================================================================
 
-# Run all checks
+# Run all checks (lint + typecheck)
 check: check-backend check-frontend
+
+# Run all checks + tests
+verify: check test
 
 # Format all code
 fmt: fmt-backend fmt-frontend
 
 # Python checks
 check-backend:
-    docker compose exec backend uv run ruff check backend/src
-    docker compose exec backend uv run pyright backend/src
+    .venv/bin/ruff check backend/src
+    .venv/bin/pyright backend/src
 
 # Format Python
 fmt-backend:
-    docker compose exec backend uv run ruff format backend/src
-    docker compose exec backend uv run ruff check --fix backend/src
+    .venv/bin/ruff format backend/src
+    .venv/bin/ruff check --fix backend/src
 
 # Frontend checks
 check-frontend:
-    docker compose exec frontend npm run check
+    cd frontend && npx @biomejs/biome check ./src && npx tsc --noEmit
 
 # Format frontend
 fmt-frontend:
-    docker compose exec frontend npm run fmt
+    cd frontend && npx @biomejs/biome format --write ./src
 
 # =============================================================================
 # Utilities
