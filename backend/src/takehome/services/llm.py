@@ -33,11 +33,16 @@ agent = Agent(
 )
 
 
+_title_agent = Agent(
+    "anthropic:claude-haiku-4-5-20251001",
+    system_prompt="Generate concise 3-5 word titles. Return only the title, nothing else.",
+)
+
+
 async def generate_title(user_message: str) -> str:
     """Generate a 3-5 word conversation title from the first user message."""
-    result = await agent.run(
-        f"Generate a concise 3-5 word title for a conversation that starts with: '{user_message}'. "
-        "Return only the title, nothing else."
+    result = await _title_agent.run(
+        f"Generate a concise 3-5 word title for a conversation that starts with: '{user_message}'"
     )
     title = str(result.output).strip().strip('"').strip("'")
     # Truncate if too long

@@ -42,7 +42,9 @@ export default function App() {
 	const handleCitationClick = useCallback(
 		(documentId: string, pageNumber: number) => {
 			selectDocument(documentId);
-			setTargetPage(pageNumber);
+			// Reset then set to ensure useEffect fires even for the same page
+			setTargetPage(null);
+			queueMicrotask(() => setTargetPage(pageNumber));
 		},
 		[selectDocument],
 	);

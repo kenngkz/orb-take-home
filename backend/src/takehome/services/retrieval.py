@@ -219,7 +219,7 @@ async def retrieve_chunks(
     try:
         fts_results = await _fts_search(session, conversation_id, query, top_k)
     except Exception:
-        logger.debug("FTS search failed, continuing without keyword results")
+        logger.warning("FTS search failed, continuing without keyword results", exc_info=True)
 
     # --- Vector search (best-effort) ---
     vector_results: list[ChunkResult] = []
@@ -229,7 +229,7 @@ async def retrieve_chunks(
             session, conversation_id, query_embedding, top_k
         )
     except Exception:
-        logger.debug("Vector search unavailable, using FTS only")
+        logger.warning("Vector search failed, continuing with FTS only", exc_info=True)
 
     # --- Merge ---
     if fts_results or vector_results:

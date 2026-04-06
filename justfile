@@ -94,13 +94,13 @@ fmt: fmt-backend fmt-frontend
 
 # Python checks
 check-backend:
-    .venv/bin/ruff check backend/src
-    .venv/bin/pyright backend/src
+    docker compose exec backend uv run ruff check backend/src
+    docker compose exec backend uv run pyright backend/src
 
 # Format Python
 fmt-backend:
-    .venv/bin/ruff format backend/src
-    .venv/bin/ruff check --fix backend/src
+    docker compose exec backend uv run ruff format backend/src
+    docker compose exec backend uv run ruff check --fix backend/src
 
 # Frontend checks
 check-frontend:
