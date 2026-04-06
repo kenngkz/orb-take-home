@@ -1,95 +1,63 @@
 ---
-description: Run E2E evaluation via Playwright MCP (background agent)
+description: Run E2E evaluation via Playwright MCP (parallel sub-agents)
 ---
 
-You are a **skeptical QA evaluator**, not a cheerful test runner. Your job is to use the app like a real user and find problems. Assume things are broken until proven otherwise.
+You are the **E2E test coordinator**. You orchestrate parallel sub-agents to evaluate the app quickly.
 
-## Phase 1: Load scenarios and launch browser
+## Setup
 
 1. Read `e2e/scenarios.md` to load all test scenarios.
-2. Navigate to http://localhost:5173. If unreachable, report and stop.
-3. Check for test PDFs in `e2e/fixtures/`. If missing, note and skip upload scenarios.
+2. Check that test PDFs exist in `e2e/fixtures/`.
 
-## Phase 2: Execute scenarios
+## Execution strategy
 
-For each scenario in order:
+Split the scenarios into **independent groups** that can run in parallel as sub-agents. Each sub-agent gets its own browser session.
 
-1. Log the scenario name.
-2. Follow the steps using Playwright MCP tools.
-3. After each major step:
-   - Take a screenshot (`mcp__playwright__browser_take_screenshot`)
-   - Read the accessibility tree (`mcp__playwright__browser_snapshot`)
-   - Check for console errors (`mcp__playwright__browser_console_messages`)
-4. Record a **verdict** and **quality notes** (see grading below).
-5. If a scenario fails, continue to the next — don't abort.
+Launch these sub-agents **simultaneously** using the Agent tool:
 
-For file uploads, use `mcp__playwright__browser_file_upload` with PDFs from `e2e/fixtures/`.
-For streaming responses, wait up to 30 seconds. Use `mcp__playwright__browser_wait_for` if needed.
+### Agent 1: "Core navigation"
+Scenarios: App loads, Create and delete conversation, Page navigation.
+Instructions: Navigate to http://localhost:5173. Test app loading, conversation CRUD, and PDF page navigation. For page nav, create a conversation and upload `e2e/fixtures/lease-agreement.pdf` first. Take screenshots after each step. Use `mcp__playwright__browser_snapshot` to verify DOM state. Check console errors with `mcp__playwright__browser_console_messages`. Report verdict (PASS/FAIL) and notes for each scenario.
 
-## Phase 3: Quality evaluation
+### Agent 2: "Document management"
+Scenarios: Upload single document, Upload multiple documents, Switch between documents, Delete a document.
+Instructions: Navigate to http://localhost:5173. Create a fresh conversation. Upload `e2e/fixtures/lease-agreement.pdf`, verify it renders. Then upload `e2e/fixtures/rent-review.pdf`, verify tabs appear. Switch between docs, verify PDF updates and page resets. Delete one doc, verify tab bar updates. Take screenshots after each step. Use `mcp__playwright__browser_snapshot` to verify DOM state. Check console errors. Report verdict and notes for each scenario.
 
-After completing all scenarios, do a **holistic evaluation pass**. Navigate through the app freely and assess:
+### Agent 3: "Chat and Q&A"
+Scenarios: Send message and receive response, Multi-document question.
+Instructions: Navigate to http://localhost:5173. Create a conversation, upload both PDFs from `e2e/fixtures/`. Send "What is the annual rent in the lease agreement?" and wait up to 30s for streaming response. Take screenshot. Then send "Compare the proposed rent in the rent review with the current rent in the lease" and wait for response. Take screenshot. Verify responses reference correct documents by name. Report verdict and notes.
 
-### Design quality
-- Is there a coherent visual language (colors, typography, spacing)?
-- Does the layout feel professional or like default scaffolding?
-- Are interactive elements (buttons, inputs, tabs) visually distinct and discoverable?
-- Is text readable? Are contrast ratios adequate?
+### Agent 4: "Robustness and quality"
+This agent does the holistic evaluation. Instructions: Navigate to http://localhost:5173. Test edge cases:
+- Send a message with no document uploaded — does the app handle it gracefully?
+- Try to send an empty message — is the send button disabled or does it error?
+- Double-click "New chat" rapidly — are duplicate conversations created?
+- Reload the page — does the selected conversation persist?
+- Check all console errors/warnings.
+Then assess quality:
+- **Design**: Coherent visual language? Professional or scaffolding? Readable typography?
+- **UX**: Loading states? Error states? Empty states helpful? Responsive?
+- **Functional**: Console errors? All clickable elements work? State persistence?
+- **Robustness**: Edge cases handled?
+Rate each 1-5 and list all issues found with severity (CRITICAL/MAJOR/MINOR/COSMETIC).
 
-### UX quality
-- Are loading states visible (spinners, skeletons, disabled states)?
-- Do error states exist and make sense?
-- Is the empty state helpful (tells user what to do)?
-- Does the app feel responsive or sluggish?
-- Are transitions smooth or jarring?
+## After all agents complete
 
-### Functional quality
-- Are there any console errors or warnings?
-- Do all clickable elements respond?
-- Does state persist correctly (reload the page — does the conversation survive)?
-- Are there any dead-end states (user gets stuck with no way forward)?
+Compile the results into a single report:
 
-### Robustness
-- What happens with no documents uploaded and a message sent?
-- What happens if you send an empty message?
-- What happens if you click rapidly (double-submit, double-create)?
-
-## Phase 4: Report
-
-Output a structured report:
-
-### Scenario results
+### Scenario results table
 ```
 Scenario                        | Verdict | Notes
 --------------------------------|---------|------
-App loads                       | PASS    |
-Create and delete conversation  | FAIL    | Delete button not visible
 ...
 ```
 
-### Quality grades
-Rate each dimension 1-5 (1 = broken, 3 = acceptable, 5 = polished):
-- **Design quality**: X/5 — [one-line justification]
-- **UX quality**: X/5 — [one-line justification]
-- **Functional quality**: X/5 — [one-line justification]
-- **Robustness**: X/5 — [one-line justification]
+### Quality grades (from Agent 4)
+- **Design quality**: X/5
+- **UX quality**: X/5
+- **Functional quality**: X/5
+- **Robustness**: X/5
 
-### Issues found
-List every issue, ordered by severity (critical → minor):
-```
-[CRITICAL] Description — what happened, steps to reproduce
-[MAJOR]    Description — what happened, steps to reproduce
-[MINOR]    Description — what happened, steps to reproduce
-[COSMETIC] Description — what happened
-```
+### Issues found (merged from all agents, deduplicated, ordered by severity)
 
-### What works well
-Briefly note 2-3 things that genuinely work well. Don't force compliments.
-
-## Evaluator mindset
-
-- Be skeptical. If something looks fine at first glance, poke harder.
-- Don't praise mediocre work. "It renders" is not a compliment.
-- Compare against what a real lawyer would expect from a professional tool.
-- Note things that are technically functional but feel bad (slow, ugly, confusing).
-- If you catch yourself saying "this is great" — question whether it actually is, or whether you're being sycophantic.
+### What works well (2-3 genuine positives)
