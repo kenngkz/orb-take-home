@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from takehome.config import settings
-from takehome.db.models import Document
+from takehome.db.models import Document, DocumentChunk
 
 logger = structlog.get_logger()
 
@@ -57,6 +57,7 @@ async def upload_document(
     # Extract text using PyMuPDF
     extracted_text = ""
     page_count = 0
+    page_texts: list[tuple[int, str]] = []  # (page_number, text)
     try:
         doc = fitz.open(file_path)
         page_count = len(doc)
@@ -66,6 +67,7 @@ async def upload_document(
             text: str = page.get_text()  # type: ignore[union-attr]
             if text.strip():
                 pages.append(f"--- Page {page_num + 1} ---\n{text}")
+                page_texts.append((page_num + 1, text.strip()))
         extracted_text = "\n\n".join(pages)
         doc.close()
     except Exception:
@@ -77,6 +79,7 @@ async def upload_document(
         filename=original_filename,
         page_count=page_count,
         text_length=len(extracted_text),
+        chunk_count=len(page_texts),
     )
 
     # Create the document record
@@ -88,6 +91,17 @@ async def upload_document(
         page_count=page_count,
     )
     session.add(document)
+    await session.flush()  # get document.id before creating chunks
+
+    # Create per-page chunks
+    for page_number, page_content in page_texts:
+        chunk = DocumentChunk(
+            document_id=document.id,
+            page_number=page_number,
+            content=page_content,
+        )
+        session.add(chunk)
+
     await session.commit()
     await session.refresh(document)
     return document
@@ -108,6 +122,33 @@ async def get_documents_for_conversation(
         select(Document)
         .where(Document.conversation_id == conversation_id)
         .order_by(Document.uploaded_at.asc())
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_chunks_for_document(
+    session: AsyncSession, document_id: str
+) -> list[DocumentChunk]:
+    """Get all chunks for a document, ordered by page number."""
+    stmt = (
+        select(DocumentChunk)
+        .where(DocumentChunk.document_id == document_id)
+        .order_by(DocumentChunk.page_number.asc())
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_chunks_for_conversation(
+    session: AsyncSession, conversation_id: str
+) -> list[DocumentChunk]:
+    """Get all chunks across all documents in a conversation, ordered by document then page."""
+    stmt = (
+        select(DocumentChunk)
+        .join(Document)
+        .where(Document.conversation_id == conversation_id)
+        .order_by(Document.uploaded_at.asc(), DocumentChunk.page_number.asc())
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())

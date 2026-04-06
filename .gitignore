@@ -37,3 +37,7 @@ pgdata/
 
 # Internal data generation scripts
 scripts/generate-usage-data.py
+
+# E2E evaluator outputs
+e2e-screenshots/
+.playwright-mcp/

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 
+import fitz  # PyMuPDF
 from httpx import AsyncClient
 
 from takehome.db.models import Conversation
@@ -23,6 +24,17 @@ def make_test_pdf() -> io.BytesIO:
         b"startxref\n190\n%%EOF"
     )
     return io.BytesIO(pdf_bytes)
+
+
+def make_multi_page_pdf(pages: list[str]) -> io.BytesIO:
+    """Create a PDF with text content on each page using PyMuPDF."""
+    doc = fitz.open()
+    for text in pages:
+        page = doc.new_page()
+        page.insert_text((72, 72), text)  # type: ignore[union-attr]
+    buf = io.BytesIO(doc.tobytes())
+    doc.close()
+    return buf
 
 
 async def test_upload_document(client: AsyncClient, conversation: Conversation) -> None:
@@ -124,3 +136,73 @@ async def test_conversation_detail_no_documents(client: AsyncClient) -> None:
     assert data["has_document"] is False
     assert isinstance(data["documents"], list)
     assert len(data["documents"]) == 0
+
+
+# --- Chunking tests ---
+
+
+async def test_upload_creates_chunks(client: AsyncClient, conversation: Conversation) -> None:
+    pdf = make_multi_page_pdf(["Page one content", "Page two content", "Page three content"])
+    resp = await client.post(
+        f"/api/conversations/{conversation.id}/documents",
+        files={"file": ("test.pdf", pdf, "application/pdf")},
+    )
+    assert resp.status_code == 201
+    doc_id = resp.json()["id"]
+
+    chunks_resp = await client.get(f"/api/documents/{doc_id}/chunks")
+    assert chunks_resp.status_code == 200
+    chunks = chunks_resp.json()
+    assert len(chunks) == 3
+    assert chunks[0]["page_number"] == 1
+    assert chunks[1]["page_number"] == 2
+    assert chunks[2]["page_number"] == 3
+    assert "Page one content" in chunks[0]["content"]
+    assert "Page two content" in chunks[1]["content"]
+    assert "Page three content" in chunks[2]["content"]
+
+
+async def test_chunks_deleted_with_document(
+    client: AsyncClient, conversation: Conversation
+) -> None:
+    pdf = make_multi_page_pdf(["Some text"])
+    resp = await client.post(
+        f"/api/conversations/{conversation.id}/documents",
+        files={"file": ("test.pdf", pdf, "application/pdf")},
+    )
+    doc_id = resp.json()["id"]
+
+    # Verify chunks exist
+    chunks_resp = await client.get(f"/api/documents/{doc_id}/chunks")
+    assert len(chunks_resp.json()) == 1
+
+    # Delete doc — chunks should cascade
+    await client.delete(f"/api/documents/{doc_id}")
+
+    chunks_resp = await client.get(f"/api/documents/{doc_id}/chunks")
+    assert chunks_resp.status_code == 200
+    assert len(chunks_resp.json()) == 0
+
+
+async def test_empty_page_not_chunked(client: AsyncClient, conversation: Conversation) -> None:
+    """Pages with no text content should not create chunks."""
+    # Create a PDF with one text page and one blank page
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "Has content")  # type: ignore[union-attr]
+    doc.new_page()  # blank page
+    buf = io.BytesIO(doc.tobytes())
+    doc.close()
+
+    resp = await client.post(
+        f"/api/conversations/{conversation.id}/documents",
+        files={"file": ("test.pdf", buf, "application/pdf")},
+    )
+    assert resp.status_code == 201
+    doc_id = resp.json()["id"]
+    assert resp.json()["page_count"] == 2  # 2 pages in PDF
+
+    chunks_resp = await client.get(f"/api/documents/{doc_id}/chunks")
+    chunks = chunks_resp.json()
+    assert len(chunks) == 1  # only the page with content
+    assert chunks[0]["page_number"] == 1

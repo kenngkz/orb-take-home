@@ -13,6 +13,7 @@ from takehome.db.session import get_session
 from takehome.services.conversation import get_conversation
 from takehome.services.document import (
     delete_document,
+    get_chunks_for_document,
     get_document,
     get_documents_for_conversation,
     upload_document,
@@ -123,6 +124,33 @@ async def list_documents_endpoint(
             uploaded_at=doc.uploaded_at,
         )
         for doc in documents
+    ]
+
+
+class ChunkOut(BaseModel):
+    id: str
+    document_id: str
+    page_number: int
+    content: str
+
+    model_config = {"from_attributes": True}
+
+
+@router.get("/api/documents/{document_id}/chunks", response_model=list[ChunkOut])
+async def list_chunks_endpoint(
+    document_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> list[ChunkOut]:
+    """List all chunks for a document, ordered by page number."""
+    chunks = await get_chunks_for_document(session, document_id)
+    return [
+        ChunkOut(
+            id=c.id,
+            document_id=c.document_id,
+            page_number=c.page_number,
+            content=c.content,
+        )
+        for c in chunks
     ]
 
 
