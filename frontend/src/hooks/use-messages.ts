@@ -97,7 +97,10 @@ export function useMessages(conversationId: string | null) {
 								accumulated += parsed.content;
 								setStreamingContent(accumulated);
 							} else if (parsed.type === "message" && parsed.message) {
-								// Final message from server
+								// Final message from server — clear streaming immediately
+								// to avoid a brief duplicate (streaming bubble + persisted message)
+								setStreaming(false);
+								setStreamingContent("");
 								setMessages((prev) => [...prev, parsed.message as Message]);
 								accumulated = "";
 							} else if (parsed.content && !parsed.type) {
