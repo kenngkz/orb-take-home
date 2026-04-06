@@ -15,7 +15,7 @@ from takehome.db.models import Message
 from takehome.db.session import get_session
 from takehome.services.citations import parse_citations, replace_citations_with_markers
 from takehome.services.conversation import get_conversation, update_conversation
-from takehome.services.llm import chat_with_documents, generate_title
+from takehome.services.llm import chat_with_documents, generate_title, rewrite_query_with_context
 from takehome.services.retrieval import retrieve_chunks
 
 logger = structlog.get_logger()
@@ -111,10 +111,7 @@ async def send_message(
 
     logger.info("User message saved", conversation_id=conversation_id, message_id=user_message.id)
 
-    # Retrieve relevant chunks for the user's query
-    chunks = await retrieve_chunks(session, conversation_id, body.content)
-
-    # Load conversation history (exclude the message we just saved, it will be the user_message param)
+    # Load conversation history (exclude the message we just saved)
     stmt = (
         select(Message)
         .where(Message.conversation_id == conversation_id)
@@ -127,6 +124,12 @@ async def send_message(
     conversation_history: list[dict[str, str]] = [
         {"role": m.role, "content": m.content} for m in history_messages
     ]
+
+    # Rewrite query with conversation context for better retrieval on follow-ups
+    retrieval_query = await rewrite_query_with_context(body.content, conversation_history)
+
+    # Retrieve relevant chunks using the context-aware query
+    chunks = await retrieve_chunks(session, conversation_id, retrieval_query)
 
     # Determine if this is the first user message (for title generation)
     user_msg_count = sum(1 for m in history_messages if m.role == "user")

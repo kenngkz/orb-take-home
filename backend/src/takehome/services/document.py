@@ -16,6 +16,37 @@ from takehome.services.embedding import embed_texts
 
 logger = structlog.get_logger()
 
+OVERLAP_SENTENCES = 3
+
+
+def _extract_trailing_sentences(text: str, n: int = OVERLAP_SENTENCES) -> str:
+    """Extract the last n sentence fragments from text for cross-page overlap."""
+    parts = text.split(". ")
+    if len(parts) <= n:
+        return text
+    trailing = ". ".join(parts[-n:])
+    if not trailing.endswith("."):
+        trailing += "."
+    return trailing
+
+
+def _add_page_overlap(page_texts: list[tuple[int, str]]) -> list[tuple[int, str]]:
+    """Prepend trailing context from the previous page to each chunk.
+
+    Captures clauses that span page boundaries while preserving the page number
+    attribution for citations. The first page is returned unchanged.
+    """
+    if len(page_texts) <= 1:
+        return page_texts
+
+    result: list[tuple[int, str]] = [page_texts[0]]
+    for i in range(1, len(page_texts)):
+        prev_content = page_texts[i - 1][1]
+        overlap = _extract_trailing_sentences(prev_content)
+        page_num, content = page_texts[i]
+        result.append((page_num, f"[...continued from previous page] {overlap}\n\n{content}"))
+    return result
+
 
 async def upload_document(
     session: AsyncSession, conversation_id: str, file: UploadFile
@@ -77,6 +108,9 @@ async def upload_document(
         if os.path.exists(file_path):
             os.remove(file_path)
         raise
+
+    # Add cross-page overlap to capture clauses spanning page boundaries
+    page_texts = _add_page_overlap(page_texts)
 
     logger.info(
         "Extracted text from PDF",

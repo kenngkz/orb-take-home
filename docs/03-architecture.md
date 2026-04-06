@@ -8,6 +8,9 @@ Three-panel app: sidebar (conversations) | chat (Q&A) | document viewer (PDF).
 User query
     |
     v
+[Query generation] -- rewrites follow-ups into standalone retrieval queries
+    |
+    v
 [PostgreSQL FTS] ----+
                      |--> RRF merge --> token budget --> LLM (Haiku) --> SSE stream
 [pgvector cosine] ---+
@@ -23,7 +26,7 @@ See [docs/04-retrieval.md](04-retrieval.md) for the full deep-dive.
 
 Page-level chunks. Each PDF page becomes a `DocumentChunk` row with `document_id`, `page_number`, `content`, and `embedding` (vector(384)). Pages with no extractable text are skipped.
 
-**Why page-level:** Lawyers think in pages. Citations need page references that map directly to the PDF viewer. More sophisticated chunking (semantic splitting, overlap) would improve retrieval quality but breaks the clean page-to-citation mapping.
+**Why page-level:** Lawyers think in pages. Citations need page references that map directly to the PDF viewer. Each chunk includes trailing context from the previous page (3 sentences) to capture clauses that span page boundaries without breaking the page-to-citation mapping.
 
 ### Hybrid search
 
@@ -48,7 +51,8 @@ If hybrid search returns fewer than 3 results (broad queries like "summarise the
 
 ## LLM integration
 
-- **Model:** Claude Haiku 4.5 via Pydantic-AI (separate lightweight agent for title generation)
+- **Model:** Claude Haiku 4.5 via Pydantic-AI (separate lightweight agents for title generation and query generation)
+- **Query generation:** Follow-up messages are rewritten into standalone retrieval queries using a lightweight LLM call before search. Resolves pronouns and implicit references ("what about the break clause?" → "break clause provisions in the lease agreement"). First messages skip this step.
 - **Conversation history:** Pydantic-AI `message_history` with proper role-tagged turns and a 20-turn sliding window
 - **Document context:** Chunks formatted as `<chunk document="filename" page="N">` XML tags. System prompt instructs the model to cite using these attributes.
 - **Streaming:** SSE with `content` → `message` → `done` events. Title generation runs after `done` event to avoid blocking the client.

@@ -63,6 +63,11 @@ def _matched_keys(results: list[ChunkResult]) -> set[tuple[str, int]]:
     return {(r.document_filename, r.page_number) for r in results}
 
 
+def _top_n_keys(results: list[ChunkResult], n: int) -> set[tuple[str, int]]:
+    """Return set of (filename, page_number) from the top n ranked results."""
+    return {(r.document_filename, r.page_number) for r in results[:n]}
+
+
 def _is_fts_path(results: list[ChunkResult]) -> bool:
     """True if results came from FTS (any result has rank > 0), not fallback."""
     return any(r.rank > 0.0 for r in results)
@@ -116,6 +121,8 @@ async def test_simple_rent_lookup(session: AsyncSession) -> None:
     matched = _matched_keys(results)
     assert ("lease-100-bishopsgate.pdf", 3) in matched
     assert _is_fts_path(results)
+    # Rent clause should rank in top 2 (precision, not just recall)
+    assert ("lease-100-bishopsgate.pdf", 3) in _top_n_keys(results, 2)
     # Assignment clause, repair clause, and insurance clause should not match
     assert ("lease-100-bishopsgate.pdf", 7) not in matched
     assert ("lease-100-bishopsgate.pdf", 12) not in matched
@@ -170,6 +177,10 @@ async def test_cross_document_rent_comparison(session: AsyncSession) -> None:
     # Both documents' rent-related pages should be retrieved
     assert ("lease-100-bishopsgate.pdf", 3) in matched
     assert ("rent-review-memo-2023.pdf", 1) in matched
+    # Both rent pages should rank in top 3 (precision)
+    top3 = _top_n_keys(results, 3)
+    assert ("lease-100-bishopsgate.pdf", 3) in top3
+    assert ("rent-review-memo-2023.pdf", 1) in top3
     # The use clause should not match
     assert ("lease-100-bishopsgate.pdf", 8) not in matched
     # Results should span both documents
@@ -222,6 +233,10 @@ async def test_break_clause_search(session: AsyncSession) -> None:
     assert ("lease-50-cheapside.pdf", 5) in matched
     assert ("lease-50-cheapside.pdf", 6) in matched
     assert _is_fts_path(results)
+    # Break clause pages should rank in top 2 (precision)
+    top2 = _top_n_keys(results, 2)
+    assert ("lease-50-cheapside.pdf", 5) in top2
+    assert ("lease-50-cheapside.pdf", 6) in top2
     # Alterations clause should not match
     assert ("lease-50-cheapside.pdf", 10) not in matched
 
@@ -367,7 +382,11 @@ async def test_rent_review_two_term_query(session: AsyncSession) -> None:
     assert ("lease-100-bishopsgate.pdf", 4) in matched
     assert ("lease-100-bishopsgate.pdf", 5) in matched
     assert _is_fts_path(results)
-    # Page 3 has 'rent' but not 'review', and plainto_tsquery ANDs terms
+    # Rent review pages should rank in top 3 (precision)
+    top3 = _top_n_keys(results, 3)
+    assert ("lease-100-bishopsgate.pdf", 4) in top3
+    assert ("lease-100-bishopsgate.pdf", 5) in top3
+    # Page 3 has 'rent' but not 'review', and websearch_to_tsquery ANDs terms
     assert ("lease-100-bishopsgate.pdf", 3) not in matched
     # The alterations clause should not match
     assert ("lease-100-bishopsgate.pdf", 10) not in matched
@@ -376,10 +395,10 @@ async def test_rent_review_two_term_query(session: AsyncSession) -> None:
 async def test_rent_review_mechanism_fts_limitation(session: AsyncSession) -> None:
     """Adding 'mechanism' to 'rent review' breaks FTS due to AND semantics.
 
-    plainto_tsquery('english', 'rent review mechanism') produces
+    websearch_to_tsquery('english', 'rent review mechanism') produces
     'rent' & 'review' & 'mechan'. No chunk contains the word 'mechanism',
     so the AND query matches nothing. This is a known limitation of
-    plainto_tsquery: every query term must appear in the chunk. Fallback
+    websearch_to_tsquery: every query term must appear in the chunk. Fallback
     correctly provides all chunks for the LLM to reason over.
     """
     conv_id = await _seed_chunks(
@@ -474,6 +493,10 @@ async def test_insurance_across_documents(session: AsyncSession) -> None:
     assert ("lease-100-bishopsgate.pdf", 15) in matched
     assert ("licence-to-alter.pdf", 3) in matched
     assert _is_fts_path(results)
+    # Insurance pages should rank in top 2 (precision)
+    top2 = _top_n_keys(results, 2)
+    assert ("lease-100-bishopsgate.pdf", 15) in top2
+    assert ("licence-to-alter.pdf", 3) in top2
     # Non-insurance pages should not match
     assert ("lease-100-bishopsgate.pdf", 7) not in matched
     assert ("licence-to-alter.pdf", 2) not in matched
@@ -482,9 +505,9 @@ async def test_insurance_across_documents(session: AsyncSession) -> None:
 async def test_insurance_obligations_and_limitation(session: AsyncSession) -> None:
     """'Insurance obligations' fails FTS because of AND semantics.
 
-    plainto_tsquery('english', 'insurance obligations') -> 'insur' & 'oblig'.
+    websearch_to_tsquery('english', 'insurance obligations') -> 'insur' & 'oblig'.
     The legal text says 'insure' and 'insurance' but never 'obligation' or
-    'obligations'. Since plainto_tsquery requires ALL terms to match, no
+    'obligations'. Since websearch_to_tsquery requires ALL terms to match, no
     chunk qualifies. This is a real FTS gap: lawyers naturally say 'insurance
     obligations' but legal drafters write 'the Tenant shall insure' without
     using the word 'obligation'. Fallback is the correct outcome here.
@@ -663,6 +686,10 @@ async def test_stemming_matches_plural_and_verb_forms(session: AsyncSession) -> 
     assert ("lease-100-bishopsgate.pdf", 7) in matched
     assert ("lease-100-bishopsgate.pdf", 8) in matched
     assert _is_fts_path(results)
+    # Assignment pages should rank in top 2 (precision)
+    top2 = _top_n_keys(results, 2)
+    assert ("lease-100-bishopsgate.pdf", 7) in top2
+    assert ("lease-100-bishopsgate.pdf", 8) in top2
     # Rent clause should not match
     assert ("lease-100-bishopsgate.pdf", 3) not in matched
 
@@ -732,7 +759,7 @@ async def test_annual_vs_annum_stem_mismatch(session: AsyncSession) -> None:
 
     PostgreSQL English stemmer: 'annual' -> 'annual', 'annum' -> 'annum'.
     These are different stems despite being the same Latin root. Combined
-    with plainto_tsquery's AND semantics, 'annual' & 'rent' won't match
+    with websearch_to_tsquery's AND semantics, 'annual' & 'rent' won't match
     a chunk containing 'per annum' and 'rent' because 'annual' != 'annum'.
     This is a real gap that affects CRE documents where 'per annum' is the
     standard phrasing.
@@ -868,7 +895,7 @@ async def test_cross_reference_title_and_lease_by_address(session: AsyncSession)
 async def test_multi_term_address_query_fts_limitation(session: AsyncSession) -> None:
     """'100 Bishopsgate lease' with AND semantics excludes title register page 1.
 
-    plainto_tsquery('english', '100 Bishopsgate lease') -> '100' & 'bishopsg' & 'leas'.
+    websearch_to_tsquery('english', '100 Bishopsgate lease') -> '100' & 'bishopsg' & 'leas'.
     Title register page 1 mentions '100 Bishopsgate' but not 'lease', so it
     fails the AND match. Only chunks containing ALL three terms qualify.
     This is a real limitation for cross-document queries where the user's
@@ -971,6 +998,8 @@ async def test_service_charge_with_red_herring(session: AsyncSession) -> None:
     # The actual service charge clauses should match
     assert ("lease-100-bishopsgate.pdf", 16) in matched
     assert _is_fts_path(results)
+    # Service charge page should rank first (precision)
+    assert ("lease-100-bishopsgate.pdf", 16) in _top_n_keys(results, 1)
 
     # The licence notice clause mentions 'service' but in the context of
     # 'service of notices' — FTS will still match on the word 'service'.

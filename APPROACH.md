@@ -8,9 +8,11 @@ A hybrid retrieval pipeline (PostgreSQL FTS + pgvector embeddings + Reciprocal R
 
 **Hybrid search.** CRE legal queries break any single retrieval method. FTS handles exact terms well ("break clause", "rent review") but fails on synonym gaps — a lawyer searching "termination rights" won't find a clause titled "break clause". Embeddings (BAAI/bge-small-en-v1.5 via fastembed, local ONNX inference) catch these semantic gaps. RRF merges the two ranked lists using rank positions rather than raw scores, sidestepping the incompatible score spaces problem between `ts_rank` floats and cosine distances. The system degrades gracefully at every layer: embedding failure falls back to FTS-only, FTS failure falls back to vector-only, both failing returns all chunks in reading order. See [docs/04-retrieval.md](docs/04-retrieval.md).
 
-**Page-level chunking.** A deliberate trade-off. Each PDF page becomes one chunk, giving a clean 1:1 mapping between citations and the PDF viewer — click a citation, see the exact page. The cost is that cross-page clauses get split. With more time I'd explore semantic chunking with overlap, but that makes citation mapping a harder problem.
+**Page-level chunking with overlap.** Each PDF page becomes one chunk, giving a clean 1:1 mapping between citations and the PDF viewer. Cross-page clauses get split — mitigated by prepending trailing context from the previous page to each chunk. This captures clause continuations (e.g., a rent review schedule spanning pages 14-16) while preserving the page-to-citation mapping.
 
 **Local embeddings.** fastembed runs a 33M-parameter model locally via ONNX. No document data leaves the server (CRE leases are confidential), no per-query API costs, no external dependency that could fail. Quality is sufficient for the synonym gap problem that motivated adding embeddings. In production I'd use a more powerful embedding model and a more capable generation model (Sonnet/Opus).
+
+**Query generation.** Follow-up messages like "what about the break clause?" lack context without the conversation history. A lightweight LLM call rewrites the user's message into a standalone retrieval query before search, resolving pronouns and implicit references. First messages skip this step (no history = no rewriting needed).
 
 ## Citations — the hard problem
 
@@ -27,11 +29,16 @@ Depth on retrieval and citations over feature breadth, with an emphasis on makin
 - **Interactive elements inside a sanitizing renderer** — Streamdown strips HTML, so citation buttons can't be injected pre-render. DOM TreeWalker post-processing replaces `[N]` text nodes with clickable button elements — a pragmatic escape hatch when a library doesn't expose the hooks you need.
 - **Harness-style AI development** — inspired by Anthropic's [long-running app design patterns](https://www.anthropic.com/engineering/harness-design-long-running-apps). Used sub-agents extensively: parallel adversarial code reviewers (4 agents reviewing independently without knowing the implementation), parallel E2E evaluators (4 browser agents testing simultaneously via Playwright), and parallel implementation agents for backend/frontend work. First time implementing this pattern — the adversarial reviews caught issues (silent debug-level logging, invalid nested DOM elements, stale React closures) that manual review would have missed.
 
+## Scalability
+
+The hybrid search (GIN index + HNSW index) scales well to 12-50 documents — both indexes query in O(log n) regardless of document count. The weak point is the fallback path: vague queries that trigger "all chunks in reading order" get token-budget-capped in upload order, biasing toward earlier documents. At 50 documents this needs document-level routing — an LLM step that identifies which documents are relevant before chunk retrieval — and query decomposition for multi-part questions like "compare the rent review provisions across all leases."
+
 ## What I'd do next
 
-- **Semantic chunking with overlap** — better retrieval quality at the cost of harder citation mapping
-- **Structured LLM output** via tool use instead of regex citation parsing — more robust, eliminates format drift
-- **Domain knowledge integration** — the most impactful extension. Legal concepts, standard clause interpretations, and jurisdiction-specific rules that aren't in the uploaded documents would significantly improve answer quality
+- **Agentic retrieval loop** — replace the single retrieve-then-generate pass with a tool-using agent that can issue multiple retrieval calls. "Compare the rent review provisions across all leases" becomes a loop: the agent searches each lease individually, accumulates findings, then synthesises. This is the single biggest capability unlock — it turns the system from a one-shot RAG into a genuine research agent
+- **Structured citations via tool use** — define a `cite(filename, page)` tool in the Anthropic API so citations arrive as structured JSON alongside generated text, eliminating regex parsing entirely
+- **Cross-encoder reranking** — add a reranking step (e.g., `ms-marco-MiniLM-L-6-v2`) between retrieval and generation. RRF merges by rank position but doesn't score query-document relevance directly
+- **Domain knowledge** — the most impactful extension. Pre-embed a CRE legal ontology mapping domain concepts ("dilapidations" → "breach of repair covenants"), or add a CRE-specific thesaurus to PostgreSQL's FTS configuration
 - **Web search tool** — trivial to add with the existing architecture; useful for planning context, market comparables, and regulatory lookups
 
 ## Tools

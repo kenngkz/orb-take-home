@@ -3,10 +3,13 @@ from __future__ import annotations
 import html
 from collections.abc import AsyncIterator
 
+import structlog
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
 
 from takehome.services.retrieval import ChunkResult
+
+logger = structlog.get_logger()
 
 MAX_HISTORY_TURNS = 20
 
@@ -37,6 +40,46 @@ _title_agent = Agent(
     "anthropic:claude-haiku-4-5-20251001",
     system_prompt="Generate concise 3-5 word titles. Return only the title, nothing else.",
 )
+
+_query_rewriter = Agent(
+    "anthropic:claude-haiku-4-5-20251001",
+    system_prompt=(
+        "Rewrite the user's latest message into a standalone search query that "
+        "incorporates relevant context from the conversation history. The rewritten "
+        "query must make sense without the conversation. Return only the rewritten "
+        "query, nothing else. If the message is already self-contained, return it unchanged."
+    ),
+)
+
+
+async def rewrite_query_with_context(
+    user_message: str,
+    conversation_history: list[dict[str, str]],
+) -> str:
+    """Rewrite a follow-up message into a standalone retrieval query.
+
+    Uses conversation history to resolve pronouns and implicit references
+    (e.g., "what about the break clause?" after discussing a specific lease
+    becomes "break clause provisions in the lease agreement").
+
+    Returns the original message unchanged if there is no history.
+    """
+    if not conversation_history:
+        return user_message
+
+    recent = conversation_history[-6:]
+    context_lines = [f"{m['role']}: {m['content'][:200]}" for m in recent]
+    context = "\n".join(context_lines)
+
+    try:
+        result = await _query_rewriter.run(
+            f"Conversation so far:\n{context}\n\nLatest message to rewrite: {user_message}"
+        )
+        rewritten = str(result.output).strip().strip('"').strip("'")
+        return rewritten if rewritten else user_message
+    except Exception:
+        logger.warning("Query rewriting failed, using original message")
+        return user_message
 
 
 async def generate_title(user_message: str) -> str:
