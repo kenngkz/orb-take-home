@@ -17,6 +17,8 @@ All services run in Docker Compose: PostgreSQL 16 (pgvector), Python/FastAPI bac
 
 ## Retrieval pipeline
 
+See [docs/04-retrieval.md](04-retrieval.md) for the full deep-dive.
+
 ### Chunking
 
 Page-level chunks. Each PDF page becomes a `DocumentChunk` row with `document_id`, `page_number`, `content`, and `embedding` (vector(384)). Pages with no extractable text are skipped.
@@ -46,11 +48,20 @@ If hybrid search returns fewer than 3 results (broad queries like "summarise the
 
 ## LLM integration
 
-- **Model:** Claude Haiku 4.5 via Pydantic-AI
+- **Model:** Claude Haiku 4.5 via Pydantic-AI (separate lightweight agent for title generation)
 - **Conversation history:** Pydantic-AI `message_history` with proper role-tagged turns and a 20-turn sliding window
 - **Document context:** Chunks formatted as `<chunk document="filename" page="N">` XML tags. System prompt instructs the model to cite using these attributes.
 - **Streaming:** SSE with `content` → `message` → `done` events. Title generation runs after `done` event to avoid blocking the client.
 - **Security:** HTML escaping on chunk content and filenames before prompt injection. UUID-only filenames on disk (user-facing names in DB only).
+
+## Citation pipeline
+
+See [docs/05-citations.md](05-citations.md) for the full deep-dive.
+
+1. **Prompt engineering** — three reinforcement layers: system prompt (few-shot + negative example), per-turn user-prompt reminder, raw citations preserved in conversation history for model self-demonstration.
+2. **Parser** — regex extracts `[filename.pdf, page N]` from LLM output, validates against retrieved chunks (rejects hallucinated citations), deduplicates.
+3. **Storage** — raw response stored in DB (history reinforcement), numbered markers `[1]`, `[2]` substituted only on output to frontend.
+4. **Frontend** — DOM post-processing injects clickable button elements into Streamdown's rendered output. Citation pills below each message. Click navigates the PDF viewer to the cited document + page.
 
 ## Data model
 
@@ -64,16 +75,20 @@ All IDs are 16-char hex (truncated UUID4). Foreign keys cascade on delete. Docum
 
 ## Testing
 
-52 tests across 5 files:
+See [docs/06-testing.md](06-testing.md) for the full strategy.
+
+65 tests across 6 files:
 - **Conversation CRUD** (5 tests)
 - **Document upload + chunking** (10 tests)
 - **FTS retrieval unit** (8 tests) — matching, exclusion, fallback, token budget
 - **FTS retrieval integration** (18 tests) — realistic CRE legal queries, documents FTS limitations (synonym gaps, AND semantics)
 - **Hybrid search** (11 tests) — RRF merge, embedding pipeline, vector search proves semantic matching works where FTS fails
+- **Citation parser** (13 tests) — extraction, validation, deduplication, marker replacement
 
 ## Known limitations
 
 - **Page-level chunking** — cross-page clauses are split. No overlap between chunks.
 - **No reranking** — RRF merge is the only quality gate between retrieval and generation.
-- **Citation counting** — current `count_sources_cited` is a regex approximation. Being replaced with structured citation parsing (Step 4).
+- **Regex citation parsing** — brittle compared to structured LLM output via tool use.
+- **Haiku citation reliability** — still occasionally skips citations despite three reinforcement layers.
 - **No conversation history summarization** — sliding window truncates, doesn't summarize.
