@@ -76,7 +76,9 @@ async def list_messages(
             id=m.id,
             conversation_id=m.conversation_id,
             role=m.role,
-            content=m.content,
+            content=replace_citations_with_markers(m.content, m.citations)
+            if m.role == "assistant" and m.citations
+            else m.content,
             sources_cited=m.sources_cited,
             citations=m.citations,
             created_at=m.created_at,
@@ -156,10 +158,14 @@ async def send_message(
             event_data = json.dumps({"type": "content", "content": error_msg})
             yield f"data: {event_data}\n\n"
 
-        # Parse structured citations and strip raw markers from display text
+        # Parse structured citations
         citations = parse_citations(full_response, chunks)
         sources = len(citations)
-        clean_content = replace_citations_with_markers(full_response, citations)
+
+        # Store raw response (with [filename, page N] citations) so that
+        # conversation history shows the model its own citation pattern.
+        # Strip citations only when sending to the frontend.
+        display_content = replace_citations_with_markers(full_response, citations)
 
         # Save the assistant message to the database.
         # We need a fresh session since the outer one may have been closed.
@@ -169,7 +175,7 @@ async def send_message(
             assistant_message = Message(
                 conversation_id=conversation_id,
                 role="assistant",
-                content=clean_content,
+                content=full_response,
                 sources_cited=sources,
                 citations=citations if citations else None,
             )
@@ -177,7 +183,7 @@ async def send_message(
             await save_session.commit()
             await save_session.refresh(assistant_message)
 
-            # Send the final message event with the complete assistant message
+            # Send the final message event with display-ready content
             message_data = json.dumps(
                 {
                     "type": "message",
@@ -185,7 +191,7 @@ async def send_message(
                         "id": assistant_message.id,
                         "conversation_id": assistant_message.conversation_id,
                         "role": assistant_message.role,
-                        "content": assistant_message.content,
+                        "content": display_content,
                         "sources_cited": assistant_message.sources_cited,
                         "citations": assistant_message.citations,
                         "created_at": assistant_message.created_at.isoformat(),

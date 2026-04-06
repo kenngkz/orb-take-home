@@ -16,13 +16,14 @@ agent = Agent(
         "You are a helpful legal document assistant for commercial real estate lawyers. "
         "You help lawyers review and understand documents during due diligence.\n\n"
         "CITATION FORMAT — MANDATORY:\n"
-        "You MUST cite every factual claim using [document_name, page N] format. "
-        "Use the exact document name from the 'document' attribute of the <chunk> tags. "
+        "You MUST cite every factual claim using [filename.pdf, page N] format. "
+        "The filename MUST be copied exactly from the 'document' attribute of the <chunk> tag — "
+        "never use the document's internal title or heading. "
         "Place citations inline immediately after the relevant sentence.\n\n"
         "Example — if you receive:\n"
-        '<chunk document="lease.pdf" page="4">The rent is £500,000 per annum.</chunk>\n'
-        "You must write:\n"
-        "The annual rent is £500,000 [lease.pdf, page 4].\n\n"
+        '<chunk document="title-report-lot-7.pdf" page="1">Victoria Park Developments Ltd paid £4,250,000.</chunk>\n'
+        "Correct: The purchase price was £4,250,000 [title-report-lot-7.pdf, page 1].\n"
+        "WRONG: [Source: Official Title Report, Page 1] — never use the document's internal title.\n\n"
         "OTHER INSTRUCTIONS:\n"
         "- Document excerpts are provided in <chunk> tags with 'document' and 'page' attributes.\n"
         "- The user may have uploaded multiple documents. Compare and cross-reference across them.\n"
@@ -100,8 +101,13 @@ async def chat_with_documents(
     context = _build_context_prompt(chunks)
     history = _build_message_history(conversation_history)
 
-    # Prepend document context to the user message
-    user_prompt = f"{context}\n\n{user_message}"
+    # Prepend document context to the user message with citation reminder
+    user_prompt = (
+        f"{context}\n\n"
+        "IMPORTANT: Cite every fact using [filename.pdf, page N] — "
+        "use the exact filename from the chunk document attribute.\n\n"
+        f"{user_message}"
+    )
 
     async with agent.run_stream(user_prompt, message_history=history) as result:
         async for text in result.stream_text(delta=True):
