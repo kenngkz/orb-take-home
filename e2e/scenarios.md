@@ -150,6 +150,39 @@ Add a new `## Scenario:` section with:
 
 ---
 
+## Scenario: Citations appear in response
+
+**Preconditions**: A conversation with at least one document uploaded
+
+**Steps**:
+1. Ask a specific question about the document (e.g., "What is the annual rent in the lease agreement?")
+2. Wait for the streaming response to complete
+3. Take a screenshot
+
+**Expected**:
+- Response contains small blue numbered markers (e.g., 1, 2) inline in the text
+- Below the response, citation pills appear showing document name and page number (e.g., "lease-agreement.pdf, p. 3")
+- Each pill has a matching number badge on the left
+- The numbered markers in the text correspond to the pills below
+
+---
+
+## Scenario: Citation click navigates to page
+
+**Preconditions**: A conversation with a document uploaded and an assistant response with citations
+
+**Steps**:
+1. Click on a citation pill below an assistant response
+2. Take a screenshot
+3. Verify the document viewer state
+
+**Expected**:
+- Document viewer switches to the cited document (if multi-doc)
+- Document viewer navigates to the cited page number
+- The page indicator at the bottom updates to show the correct page
+
+---
+
 ## Scenario: Page navigation
 
 **Preconditions**: A document with 2+ pages is displayed in the viewer
