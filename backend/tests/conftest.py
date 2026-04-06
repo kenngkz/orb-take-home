@@ -23,6 +23,7 @@ test_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on
 async def setup_db() -> AsyncGenerator[None, None]:
     """Ensure tables exist before each test, truncate after."""
     async with engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
     yield
     async with engine.begin() as conn:

@@ -100,12 +100,21 @@ async def upload_document(
         session.add(document)
         await session.flush()  # get document.id before creating chunks
 
-        # Create per-page chunks
-        for page_number, page_content in page_texts:
+        # Embed and create per-page chunks
+        embeddings: list[list[float]] | None = None
+        try:
+            from takehome.services.embedding import embed_texts
+
+            embeddings = embed_texts([text for _, text in page_texts])
+        except Exception:
+            logger.warning("Embedding failed, storing chunks without vectors")
+
+        for i, (page_number, page_content) in enumerate(page_texts):
             chunk = DocumentChunk(
                 document_id=document.id,
                 page_number=page_number,
                 content=page_content,
+                embedding=embeddings[i] if embeddings else None,
             )
             session.add(chunk)
 

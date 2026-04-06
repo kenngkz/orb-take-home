@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
+from pgvector.sqlalchemy import Vector  # type: ignore[import-untyped]
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -68,5 +70,6 @@ class DocumentChunk(Base):
     )
     page_number: Mapped[int] = mapped_column(Integer)
     content: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[Any] = mapped_column(Vector(384), nullable=True)  # type: ignore[arg-type]
 
     document: Mapped[Document] = relationship(back_populates="chunks")

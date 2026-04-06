@@ -28,6 +28,9 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     # Logging
     "structlog>=25.1.0",
+    # Embeddings
+    "fastembed>=0.4.0",
+    "pgvector>=0.3.0",
     # File upload
     "python-multipart>=0.0.9",
     # Environment
