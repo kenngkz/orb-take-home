@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, FileText, Loader2, X } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Document as PDFDocument, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -19,13 +19,20 @@ const DEFAULT_WIDTH = 400;
 interface PdfContentProps {
 	pdfUrl: string;
 	pdfPageWidth: number;
+	targetPage?: number | null;
 }
 
-function PdfContent({ pdfUrl, pdfPageWidth }: PdfContentProps) {
+function PdfContent({ pdfUrl, pdfPageWidth, targetPage }: PdfContentProps) {
 	const [numPages, setNumPages] = useState<number>(0);
 	const [currentPage, setCurrentPage] = useState(1);
 	const [pdfLoading, setPdfLoading] = useState(true);
 	const [pdfError, setPdfError] = useState<string | null>(null);
+
+	useEffect(() => {
+		if (targetPage && targetPage >= 1 && targetPage <= numPages) {
+			setCurrentPage(targetPage);
+		}
+	}, [targetPage, numPages]);
 
 	return (
 		<>
@@ -102,6 +109,7 @@ interface DocumentViewerProps {
 	onRemove?: (documentId: string) => void;
 	activeDocumentId?: string | null;
 	onSelectDocument?: (id: string | null) => void;
+	targetPage?: number | null;
 }
 
 export function DocumentViewer({
@@ -109,6 +117,7 @@ export function DocumentViewer({
 	activeDocument,
 	onRemove,
 	onSelectDocument,
+	targetPage,
 }: DocumentViewerProps) {
 	const [width, setWidth] = useState(DEFAULT_WIDTH);
 	const [dragging, setDragging] = useState(false);
@@ -249,6 +258,7 @@ export function DocumentViewer({
 					key={activeDocument.id}
 					pdfUrl={pdfUrl}
 					pdfPageWidth={pdfPageWidth}
+					targetPage={targetPage}
 				/>
 			)}
 		</div>

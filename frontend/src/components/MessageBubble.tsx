@@ -1,14 +1,18 @@
 import { motion } from "framer-motion";
-import { Bot } from "lucide-react";
+import { Bot, FileText } from "lucide-react";
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
 import type { Message } from "../types";
 
 interface MessageBubbleProps {
 	message: Message;
+	onCitationClick?: (documentId: string, pageNumber: number) => void;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({
+	message,
+	onCitationClick,
+}: MessageBubbleProps) {
 	if (message.role === "system") {
 		return (
 			<motion.div
@@ -54,11 +58,22 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 				<div className="prose">
 					<Streamdown>{message.content}</Streamdown>
 				</div>
-				{message.sources_cited > 0 && (
-					<p className="mt-1.5 text-xs text-neutral-400">
-						{message.sources_cited} source
-						{message.sources_cited !== 1 ? "s" : ""} cited
-					</p>
+				{message.citations && message.citations.length > 0 && (
+					<div className="mt-2 flex flex-wrap gap-1.5">
+						{message.citations.map((citation) => (
+							<button
+								type="button"
+								key={`${citation.document_id}-${citation.page_number}`}
+								className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-1 text-xs text-neutral-600 transition-colors hover:bg-neutral-200 hover:text-neutral-800"
+								onClick={() =>
+									onCitationClick?.(citation.document_id, citation.page_number)
+								}
+							>
+								<FileText className="h-3 w-3" />
+								{citation.filename}, p. {citation.page_number}
+							</button>
+						))}
+					</div>
 				)}
 			</div>
 		</motion.div>

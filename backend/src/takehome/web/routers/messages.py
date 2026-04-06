@@ -13,8 +13,9 @@ from starlette.responses import StreamingResponse
 
 from takehome.db.models import Message
 from takehome.db.session import get_session
+from takehome.services.citations import parse_citations
 from takehome.services.conversation import get_conversation, update_conversation
-from takehome.services.llm import chat_with_documents, count_sources_cited, generate_title
+from takehome.services.llm import chat_with_documents, generate_title
 from takehome.services.retrieval import retrieve_chunks
 
 logger = structlog.get_logger()
@@ -33,6 +34,7 @@ class MessageOut(BaseModel):
     role: str
     content: str
     sources_cited: int
+    citations: list[dict[str, str | int]] | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -76,6 +78,7 @@ async def list_messages(
             role=m.role,
             content=m.content,
             sources_cited=m.sources_cited,
+            citations=m.citations,
             created_at=m.created_at,
         )
         for m in messages
@@ -153,8 +156,9 @@ async def send_message(
             event_data = json.dumps({"type": "content", "content": error_msg})
             yield f"data: {event_data}\n\n"
 
-        # Count sources cited in the full response
-        sources = count_sources_cited(full_response)
+        # Parse structured citations from the full response
+        citations = parse_citations(full_response, chunks)
+        sources = len(citations)
 
         # Save the assistant message to the database.
         # We need a fresh session since the outer one may have been closed.
@@ -166,6 +170,7 @@ async def send_message(
                 role="assistant",
                 content=full_response,
                 sources_cited=sources,
+                citations=citations if citations else None,
             )
             save_session.add(assistant_message)
             await save_session.commit()
@@ -181,6 +186,7 @@ async def send_message(
                         "role": assistant_message.role,
                         "content": assistant_message.content,
                         "sources_cited": assistant_message.sources_cited,
+                        "citations": assistant_message.citations,
                         "created_at": assistant_message.created_at.isoformat(),
                     },
                 }

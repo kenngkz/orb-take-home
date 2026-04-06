@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import html
-import re
 from collections.abc import AsyncIterator
 
 from pydantic_ai import Agent
@@ -21,8 +20,8 @@ agent = Agent(
         "- Document excerpts are provided in <chunk> tags with 'document' and 'page' attributes. "
         "Use these to cite your sources precisely.\n"
         "- Excerpts are tagged with their source document name and page number.\n"
-        "- When referencing specific content, ALWAYS cite the document name and page number "
-        "(e.g., 'According to lease-agreement.pdf, page 3, ...').\n"
+        "- When referencing specific content, ALWAYS cite using the format [document_name, page N] "
+        "(e.g., [lease-agreement.pdf, page 3]). Use the exact document name from the chunk tags.\n"
         "- The user may have uploaded multiple documents. Compare and cross-reference across them.\n"
         "- If the answer is not in the provided excerpts, say so clearly. Do not fabricate information.\n"
         "- Be concise and precise. Lawyers value accuracy over verbosity."
@@ -105,16 +104,3 @@ async def chat_with_documents(
         async for text in result.stream_text(delta=True):
             yield text
 
-
-def count_sources_cited(response: str) -> int:
-    """Count the number of references to document sections, clauses, pages, etc."""
-    patterns = [
-        r"section\s+\d+",
-        r"clause\s+\d+",
-        r"page\s+\d+",
-        r"paragraph\s+\d+",
-    ]
-    count = 0
-    for pattern in patterns:
-        count += len(re.findall(pattern, response, re.IGNORECASE))
-    return count

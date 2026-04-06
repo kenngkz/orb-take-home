@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { ChatSidebar } from "./components/ChatSidebar";
 import { ChatWindow } from "./components/ChatWindow";
 import { DocumentViewer } from "./components/DocumentViewer";
@@ -36,6 +36,16 @@ export default function App() {
 		remove: removeDocument,
 		refresh: refreshDocuments,
 	} = useDocuments(selectedId);
+
+	const [targetPage, setTargetPage] = useState<number | null>(null);
+
+	const handleCitationClick = useCallback(
+		(documentId: string, pageNumber: number) => {
+			selectDocument(documentId);
+			setTargetPage(pageNumber);
+		},
+		[selectDocument],
+	);
 
 	const handleSend = useCallback(
 		async (content: string) => {
@@ -85,6 +95,7 @@ export default function App() {
 					conversationId={selectedId}
 					onSend={handleSend}
 					onUpload={handleUpload}
+					onCitationClick={handleCitationClick}
 				/>
 
 				{selectedId && (
@@ -94,6 +105,7 @@ export default function App() {
 						onRemove={handleRemoveDocument}
 						activeDocumentId={activeDocumentId}
 						onSelectDocument={selectDocument}
+						targetPage={targetPage}
 					/>
 				)}
 			</div>
